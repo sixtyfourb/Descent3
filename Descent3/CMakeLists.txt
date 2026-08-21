@@ -295,8 +295,8 @@ if(WIN32)
 endif()
 
 configure_file(
-  ${CMAKE_SOURCE_DIR}/lib/d3_platform_path.h.in
-  ${CMAKE_BINARY_DIR}/lib/d3_platform_path.h
+  ${PROJECT_SOURCE_DIR}/lib/d3_platform_path.h.in
+  ${PROJECT_BINARY_DIR}/lib/d3_platform_path.h
   @ONLY
 )
 
@@ -316,7 +316,15 @@ endif()
 
 file(GLOB_RECURSE INCS "../lib/*.h")
 
-add_executable(Descent3 WIN32 MACOSX_BUNDLE ${D3Icon} ${HEADERS} ${CPPS} ${INCS} ${MANIFEST} ${RC_FILE})
+if(ANDROID)
+  # Android has no executables to speak of: the launcher dlopens a library and
+  # calls into it, so main() is renamed and the whole game links as libD3.so.
+  # See sdlmain.cpp for the rename.
+  add_library(Descent3 SHARED ${HEADERS} ${CPPS} ${INCS})
+  set_target_properties(Descent3 PROPERTIES OUTPUT_NAME "D3" PREFIX "lib")
+else()
+  add_executable(Descent3 WIN32 MACOSX_BUNDLE ${D3Icon} ${HEADERS} ${CPPS} ${INCS} ${MANIFEST} ${RC_FILE})
+endif()
 target_link_libraries(Descent3 PRIVATE
   SDL3::SDL3
   2dlib
@@ -351,25 +359,35 @@ target_link_libraries(Descent3 PRIVATE
   ${PLATFORM_LIBS})
 target_include_directories(Descent3 PRIVATE ${PROJECT_BINARY_DIR}/lib ${SDL3_INCLUDE_DIRS})
 target_link_options(Descent3 PRIVATE $<$<PLATFORM_ID:Windows>:/DEBUG:FULL>)
-set_target_properties(Descent3 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build")
-add_dependencies(Descent3
-  get_git_hash
-  Direct_TCP_IP_Hog
-  Descent3_Online_TCP_IP_Hog
-  HogFull
-  Parallax_Online_Hog
-  anarchy
-  coop
-  ctf
-  entropy
-  hoard
-  hyperanarchy
-  monsterball
-  roboanarchy
-  tanarchy
-)
+set_target_properties(Descent3 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/build")
+if(ANDROID)
+  # The hog targets pack the script modules using HogMaker, which this build
+  # compiles for the target - so it cannot be run here while cross compiling.
+  # The script modules themselves are still built; packing them is a separate
+  # step done on the host. See the Android engine cmake.
+  add_dependencies(Descent3 get_git_hash)
+else()
+  add_dependencies(Descent3
+    get_git_hash
+    Direct_TCP_IP_Hog
+    Descent3_Online_TCP_IP_Hog
+    HogFull
+    Parallax_Online_Hog
+    anarchy
+    coop
+    ctf
+    entropy
+    hoard
+    hyperanarchy
+    monsterball
+    roboanarchy
+    tanarchy
+  )
+endif()
 
-install(TARGETS Descent3 RUNTIME BUNDLE DESTINATION .)
+if(NOT ANDROID)
+  install(TARGETS Descent3 RUNTIME BUNDLE DESTINATION .)
+endif()
 if(MSVC)
   install(FILES $<TARGET_PDB_FILE:Descent3> DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()

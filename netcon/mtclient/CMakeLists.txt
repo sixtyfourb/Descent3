@@ -36,8 +36,8 @@ include(HogMaker)
 MakeHog(
   TARGET Parallax_Online_Hog
   OUTPUT "${D3_GENERATED_FILES_OUTPUT_DIRECTORY}/online/Parallax Online.d3c"
-  INPUT_FILE "${CMAKE_SOURCE_DIR}/netcon/mtclient/Parallax_Online.d3c.txt"
-  SEARCH_PATH "$<TARGET_FILE_DIR:Parallax_Online>" "${CMAKE_SOURCE_DIR}/scripts/data/fullhog/"
+  INPUT_FILE "${PROJECT_SOURCE_DIR}/netcon/mtclient/Parallax_Online.d3c.txt"
+  SEARCH_PATH "$<TARGET_FILE_DIR:Parallax_Online>" "${PROJECT_SOURCE_DIR}/scripts/data/fullhog/"
   DEPENDS Parallax_Online
 )
 

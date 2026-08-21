@@ -7,7 +7,7 @@ set(HEADERS
   osiris_import.h
   osiris_vector.h)
 set(CPPS
-  $<$<PLATFORM_ID:Darwin,Linux,OpenBSD>:
+  $<$<PLATFORM_ID:Android,Darwin,Linux,OpenBSD>:
     linux_lib.cpp
   >
 )
@@ -95,7 +95,7 @@ include(HogMaker)
 MakeHog(
   TARGET HogFull
   OUTPUT "${D3_GENERATED_FILES_OUTPUT_DIRECTORY}/d3-${HOG_NAME}.hog"
-  INPUT_FILE "${CMAKE_SOURCE_DIR}/scripts/data/fullhog/d3-${HOG_NAME}-fullhog.txt"
+  INPUT_FILE "${PROJECT_SOURCE_DIR}/scripts/data/fullhog/d3-${HOG_NAME}-fullhog.txt"
   SEARCH_PATH "$<TARGET_FILE_DIR:AIGame>"
   DEPENDS ${SCRIPTS}
 )
@@ -108,9 +108,9 @@ install(
 # FIXME: there may be only one d3-linux.hog, need deal with demo somehow.
 #	add_custom_target(HogLinuxDemo
 #		COMMAND $<TARGET_FILE:HogMaker>
-#     "${CMAKE_BINARY_DIR}/scripts/data/demohog/d3-${HOG_NAME}.hog"
-#     "${CMAKE_BINARY_DIR}/scripts/data/demohog/d3-${HOG_NAME}-demohog.txt"
-#     "${CMAKE_BINARY_DIR}/scripts/"
+#     "${PROJECT_BINARY_DIR}/scripts/data/demohog/d3-${HOG_NAME}.hog"
+#     "${PROJECT_BINARY_DIR}/scripts/data/demohog/d3-${HOG_NAME}-demohog.txt"
+#     "${PROJECT_BINARY_DIR}/scripts/"
 #		DEPENDS ${SCRIPTS} HogMaker data/fullhog/d3-${HOG_NAME}-demohog.txt
 #		COMMENT "Generate linuxdemohog/d3-${HOG_NAME}.hog"
 #	)

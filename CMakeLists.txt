@@ -95,7 +95,7 @@ if(FORCE_COLORED_OUTPUT)
   endif()
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 if(FORCE_PORTABLE_INSTALL)
@@ -115,13 +115,13 @@ endif()
 get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 # Properly determine output directory for generated files
 if(IS_MULTI_CONFIG)
-  set(D3_GENERATED_FILES_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/$<CONFIG>")
+  set(D3_GENERATED_FILES_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/build/$<CONFIG>")
 else ()
-  set(D3_GENERATED_FILES_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build")
+  set(D3_GENERATED_FILES_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/build")
 endif()
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/installed" CACHE PATH "Default install path" FORCE)
+  set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}/installed" CACHE PATH "Default install path" FORCE)
 endif()
 
 if(CMAKE_CXX_BYTE_ORDER STREQUAL "BIG_ENDIAN")
@@ -178,10 +178,21 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
   add_compile_options("-Wno-multichar;-Wall")
 endif()
 
-find_package(SDL3 3.2.6 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
-find_package(glm REQUIRED)
-find_package(httplib QUIET)
-if (TARGET httplib::httplib)
+# An embedding build (the Android one) supplies these as targets already, from
+# checkouts it manages itself - there is no package registry to find them in.
+# Look for them only when they are not there.
+if(NOT TARGET SDL3::SDL3)
+  find_package(SDL3 3.2.6 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
+endif()
+if(NOT TARGET glm::glm)
+  find_package(glm REQUIRED)
+endif()
+if(NOT TARGET httplib)
+  find_package(httplib QUIET)
+endif()
+if (TARGET httplib)
+  # Already provided by an embedding build.
+elseif (TARGET httplib::httplib)
   add_library(httplib ALIAS httplib::httplib)
 else()
   # Some Linux distributions do not package httplibConfig.cmake, so find the header manually
@@ -198,9 +209,17 @@ else()
   endif ()
 endif()
 find_package(ZLIB REQUIRED)
-find_package(plog REQUIRED)
+if(NOT TARGET plog::plog)
+  find_package(plog REQUIRED)
+endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+  # Android is Linux as far as this codebase is concerned - the same POSIX and
+  # __LINUX__ paths - so it takes the Linux hog name too. __ANDROID__ comes from
+  # the compiler, and marks the places where it is not Linux enough.
+  message("Building for Android")
+  add_compile_definitions(POSIX __LINUX__ _USE_OGL_ACTIVE_TEXTURES PRIMARY_HOG=\"d3-linux.hog\")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   message("Building for Linux")
   add_compile_definitions(POSIX __LINUX__ _USE_OGL_ACTIVE_TEXTURES PRIMARY_HOG=\"d3-linux.hog\")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")

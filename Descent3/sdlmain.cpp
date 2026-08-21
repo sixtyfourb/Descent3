@@ -217,6 +217,14 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR szCmdLine, int nC
   strupr(szCmdLine);
   GatherArgs(szCmdLine);
   bool enable_winconsole = FindArg("-winconsole");
+#elif defined(__ANDROID__)
+// The launcher dlopens libD3.so and calls in through the OpenTouch glue rather
+// than starting a process, so the entry point is a plain exported function.
+// Named to match the other engines here, which the glue already calls.
+extern "C" int dxx_main(int argc, char *argv[]);
+extern "C" int dxx_main(int argc, char *argv[]) {
+  GatherArgs(argv);
+  bool enable_winconsole = false; // there is no console to write to
 #else
 int main(int argc, char *argv[]) {
   GatherArgs(argv);

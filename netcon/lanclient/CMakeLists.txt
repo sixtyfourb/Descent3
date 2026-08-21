@@ -26,8 +26,8 @@ include(HogMaker)
 MakeHog(
   TARGET Direct_TCP_IP_Hog
   OUTPUT "${D3_GENERATED_FILES_OUTPUT_DIRECTORY}/online/Direct TCP~IP.d3c"
-  INPUT_FILE "${CMAKE_SOURCE_DIR}/netcon/lanclient/TCP_IP.d3c.txt"
-  SEARCH_PATH "$<TARGET_FILE_DIR:Direct_TCP_IP>" "${CMAKE_SOURCE_DIR}/scripts/data/fullhog/"
+  INPUT_FILE "${PROJECT_SOURCE_DIR}/netcon/lanclient/TCP_IP.d3c.txt"
+  SEARCH_PATH "$<TARGET_FILE_DIR:Direct_TCP_IP>" "${PROJECT_SOURCE_DIR}/scripts/data/fullhog/"
   DEPENDS Direct_TCP_IP
 )
 
