@@ -145,7 +145,10 @@ if(BUILD_TESTING)
 endif()
 
 # Define names for HOG files
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+if(CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "Linux"
+    OR CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+  # Android uses the Linux hog: same module names, same manifest, and
+  # PRIMARY_HOG is set to d3-linux.hog above.
   set(HOG_NAME "linux")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(HOG_NAME "osx")

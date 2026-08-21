@@ -360,30 +360,22 @@ target_link_libraries(Descent3 PRIVATE
 target_include_directories(Descent3 PRIVATE ${PROJECT_BINARY_DIR}/lib ${SDL3_INCLUDE_DIRS})
 target_link_options(Descent3 PRIVATE $<$<PLATFORM_ID:Windows>:/DEBUG:FULL>)
 set_target_properties(Descent3 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/build")
-if(ANDROID)
-  # The hog targets pack the script modules using HogMaker, which this build
-  # compiles for the target - so it cannot be run here while cross compiling.
-  # The script modules themselves are still built; packing them is a separate
-  # step done on the host. See the Android engine cmake.
-  add_dependencies(Descent3 get_git_hash)
-else()
-  add_dependencies(Descent3
-    get_git_hash
-    Direct_TCP_IP_Hog
-    Descent3_Online_TCP_IP_Hog
-    HogFull
-    Parallax_Online_Hog
-    anarchy
-    coop
-    ctf
-    entropy
-    hoard
-    hyperanarchy
-    monsterball
-    roboanarchy
-    tanarchy
-  )
-endif()
+add_dependencies(Descent3
+  get_git_hash
+  Direct_TCP_IP_Hog
+  Descent3_Online_TCP_IP_Hog
+  HogFull
+  Parallax_Online_Hog
+  anarchy
+  coop
+  ctf
+  entropy
+  hoard
+  hyperanarchy
+  monsterball
+  roboanarchy
+  tanarchy
+)
 
 if(NOT ANDROID)
   install(TARGETS Descent3 RUNTIME BUNDLE DESTINATION .)
