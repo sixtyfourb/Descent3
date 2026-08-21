@@ -10,6 +10,14 @@ while(${idx} LESS ${CMAKE_ARGC})
         set(shader_path ${CMAKE_ARGV${idx}})
         cmake_path(GET shader_path STEM shader_name)
         file(READ ${shader_path} content)
+        if(GLSL_ES)
+            # Same shader body, different dialect header. GLSL ES 3.00 is the
+            # 150-core feature set these use, but it names itself differently
+            # and has no default float precision in fragment shaders.
+            string(REPLACE "#version 150 core"
+                           "#version 300 es\nprecision highp float;\nprecision highp int;"
+                           content "${content}")
+        endif()
         file(APPEND ${shaders_h} "
 inline constexpr std::string_view ${shader_name} = R\"shader(${content}
 )shader\";

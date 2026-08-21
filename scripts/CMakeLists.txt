@@ -84,6 +84,11 @@ foreach(SCRIPT ${SCRIPTS})
     module
   )
   set_target_properties(${SCRIPT} PROPERTIES PREFIX "")
+  if(ANDROID)
+    # These go into a hog that ships with the game, and debug info in sixty-odd
+    # modules is most of its size - 121MB unstripped against about 20 stripped.
+    target_link_options(${SCRIPT} PRIVATE "-s")
+  endif()
   set_target_properties(${SCRIPT} PROPERTIES CXX_VISIBILITY_PRESET "hidden")
   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set_target_properties(${SCRIPT} PROPERTIES SUFFIX ".dylib")
