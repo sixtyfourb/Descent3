@@ -116,6 +116,7 @@ extern bool Game_paused; //	determines if game is paused.
 
 extern bool Rendering_main_view;    // determines if we're rendering the main view
 extern bool Skip_render_game_frame; // skips rendering the game frame if set.
+extern bool Menu_interface_mode;     // determines if the in-game menu is up.
 
 // Turn off all camera views
 // If total reset is true, set all views to none, otherwise kill object view but keep rear views.

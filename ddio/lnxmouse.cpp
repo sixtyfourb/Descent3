@@ -393,6 +393,40 @@ bool sdlMouseWheelFilter(SDL_Event const *event) {
 // motion into a position - so rather than chase it with deltas, place it. Only
 // the absolute position is touched; the deltas the flight controls read are
 // left alone.
+// How far a fully deflected look stick turns the view, in mouse travel per
+// second. Matched by eye against a brisk turn.
+static const float kPadLookRate = 900.0f;
+
+// A gamepad reports an axis only when it changes, so a stick held over sends
+// nothing further. Fed in as one-off mouse motion that turned the view in jumps
+// and then stopped - "digital", which is exactly how it felt. Held here instead
+// and added to the deltas each time they are drained, which is once a frame.
+static float D3_pad_yaw = 0.0f;
+static float D3_pad_pitch = 0.0f;
+
+extern "C" void d3_touch_set_pad_look(float yaw, float pitch) {
+  D3_pad_yaw = yaw;
+  D3_pad_pitch = pitch;
+}
+
+static void d3_add_pad_look() {
+  static float last_time = 0.0f;
+  const float now = timer_GetTime();
+  const float elapsed = now - last_time;
+
+  last_time = now;
+
+  // Scaled by real time so the turn rate does not follow the frame rate. A gap
+  // longer than a moment means the game was not running - loading a level, or
+  // sitting in a menu - and must not be paid out as one enormous turn.
+  if (elapsed <= 0.0f || elapsed > 0.25f) {
+    return;
+  }
+
+  DDIO_mouse_state.dx += D3_pad_yaw * kPadLookRate * elapsed;
+  DDIO_mouse_state.dy += D3_pad_pitch * kPadLookRate * elapsed;
+}
+
 extern "C" void d3_touch_move_mouse_to(float nx, float ny) {
   DDIO_mouse_state.x = DDIO_mouse_state.l + nx * (DDIO_mouse_state.r - DDIO_mouse_state.l);
   DDIO_mouse_state.y = DDIO_mouse_state.t + ny * (DDIO_mouse_state.b - DDIO_mouse_state.t);
@@ -447,6 +481,8 @@ void ddio_InternalMouseFrame(void) {
 int ddio_MouseGetState(int *x, int *y, int *dx, int *dy, int *z, int *dz) {
   //	update mouse timer.
   int btn_mask = DDIO_mouse_state.btn_mask;
+
+  d3_add_pad_look();
 
   //	get return values.
   if (x)

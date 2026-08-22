@@ -701,10 +701,16 @@ int Max_window_w, Max_window_h;
 int Game_mode = 0;
 
 #ifdef __ANDROID__
-// The touch layer needs to know whether a level is running: the menus are
-// mouse driven and want a pointer, while the game wants the flight controls.
-// Game_mode is GM_NONE outside a level.
-extern "C" int d3_touch_in_game(void) { return Game_mode != GM_NONE; }
+// The touch layer needs to know whether the flight controls are wanted or a
+// pointer is: the menus are mouse driven. A level being loaded is not enough to
+// go on, because Escape opens the in-game menu without leaving the level, and
+// TelCom and the like take over the screen the same way - so this asks the same
+// question the render path asks before it draws the game at all. Without the
+// menu cases the overlay kept the flight sticks up over the in-game menu, which
+// swallowed every touch and hid the buttons that belong to a menu.
+extern "C" int d3_touch_in_game(void) {
+  return Game_mode != GM_NONE && Game_interface_mode == GAME_INTERFACE && !Menu_interface_mode;
+}
 #endif
 
 int sound_override_force_field = -1;
