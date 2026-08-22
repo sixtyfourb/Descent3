@@ -906,44 +906,6 @@ bool Game_paused = false;
 // Used for limiting the framerate
 int Min_allowed_frametime = 0;
 
-#ifdef D3_PERF_LOG
-#include <SDL3/SDL_timer.h>
-// Crude phase timing for the port: accumulate nanoseconds per phase and print a
-// breakdown every couple of seconds. The engine's own profiler is Windows only
-// (QueryPerformanceCounter), so this stands in for it.
-extern unsigned long long D3_startFrames;
-extern unsigned long long D3_depthClears;
-extern unsigned long long D3_depthClearNs;
-
-namespace {
-struct PhaseTimes {
-  Uint64 keys, ai, obj, door, player, weather, sound, render, events, frames, reportAt;
-  Uint64 mainview, smallviews, hud, glows, cine, debuggraph;
-  Uint64 hudmain, hudaux, huditems, cockpit, reticle;
-} g_phase;
-struct PhaseScope {
-  Uint64 &slot;
-  Uint64 start;
-  explicit PhaseScope(Uint64 &s) : slot(s), start(SDL_GetTicksNS()) {}
-  ~PhaseScope() { slot += SDL_GetTicksNS() - start; }
-};
-} // namespace
-#define D3_PHASE(field) PhaseScope phase_scope_##field(g_phase.field)
-
-// hud.cpp reports its own sub-phases through here, by slot.
-void d3_phase_add(int slot, unsigned long long ns) {
-  switch (slot) {
-  case 0: g_phase.huditems += ns; break;
-  case 1: g_phase.cockpit += ns; break;
-  case 2: g_phase.reticle += ns; break;
-  default: break;
-  }
-}
-#else
-#define D3_PHASE(field) do {} while (0)
-#endif
-
-
 // determines if we're rendering the main view
 bool Rendering_main_view = false;
 bool Skip_render_game_frame = false;
@@ -2571,9 +2533,7 @@ void GameDrawHud() {
   g3_StartFrame(&Viewer_object->pos, &Viewer_object->orient, HUD_RENDER_ZOOM);
 
   //	render HUD
-  { D3_PHASE(hudmain);
   RenderHUDFrame();
-  }
 
   //	End frame
   g3_EndFrame();
@@ -2583,9 +2543,7 @@ void GameDrawHud() {
   StartFrame(0, 0, Max_window_w, Max_window_h, false);
   g3_StartFrame(&Viewer_object->pos, &Viewer_object->orient, HUD_RENDER_ZOOM);
 
-  { D3_PHASE(hudaux);
   RenderAuxHUDFrame();
-  }
 
   //	End frame
   g3_EndFrame();
@@ -2608,9 +2566,7 @@ void GameRenderFrame(void) {
   // increase our timing for the powerup sparkles, used globally by all
   Last_powerup_sparkle_time += Frametime;
 
-  { D3_PHASE(glows);
   PreUpdateAllLightGlows();
-  }
 
   // Don't render if receiving data
   if ((Game_mode & GM_MULTI) && NetPlayers[Player_num].sequence != NETSEQ_PLAYING) {
@@ -2643,30 +2599,20 @@ void GameRenderFrame(void) {
     }
 
     // Draw the big 3d view
-    { D3_PHASE(mainview);
     GameDrawMainView();
-    }
 
     // Do the small views.  These should be before GameDrawHUD() for the small windows
-    { D3_PHASE(smallviews);
     DrawSmallViews();
-    }
 
     // Do Cockpit/Hud
     if (!HUD_disabled)
-      { D3_PHASE(hud);
       GameDrawHud();
-      }
 
     // Render Ingame Cinematics
-    { D3_PHASE(cine);
     Cinematic_RenderFrame();
-    }
 
     // Process the debug visual graph
-    { D3_PHASE(debuggraph);
     DebugGraph_Render();
-    }
 
     if (Display_renderer_stats) {
       // display some rendering stats
@@ -3007,17 +2953,15 @@ void GameFrame(void) {
     if (!is_game_idle) {
       // Get and process keys
       RTP_tSTARTTIME(processkeys_time, curr_time);
-      { D3_PHASE(keys);
       ProcessKeys();
-      ProcessButtons(); }
+      ProcessButtons();
       RTP_tENDTIME(processkeys_time, curr_time);
     }
 
     // Global AI Frame Stuff  -- must be before ObjMoveAll
     RTP_tSTARTTIME(aiframeall_time, curr_time);
     if (DoAI) {
-      { D3_PHASE(ai);
-      AIFrameAll(); }
+      AIFrameAll();
     }
     a_life.DoFrame();
     RTP_tENDTIME(aiframeall_time, curr_time);
@@ -3026,8 +2970,7 @@ void GameFrame(void) {
 
     // Move objects for this frame
     RTP_tSTARTTIME(objframe_time, curr_time);
-    { D3_PHASE(obj);
-    ObjDoFrameAll(); }
+    ObjDoFrameAll();
     RTP_tENDTIME(objframe_time, curr_time);
 
     RTP_tSTARTTIME(matcenframe_time, curr_time);
@@ -3041,26 +2984,22 @@ void GameFrame(void) {
 
     // Do doorways
     RTP_tSTARTTIME(doorframe_time, curr_time);
-    { D3_PHASE(door);
-    DoorwayDoFrame(); }
+    DoorwayDoFrame();
     RTP_tENDTIME(doorframe_time, curr_time);
 
     //	Do player frame
     RTP_tSTARTTIME(playerframe_time, curr_time);
-    { D3_PHASE(player);
-    DoPlayerFrame(); }
+    DoPlayerFrame();
     RTP_tENDTIME(playerframe_time, curr_time);
 
     // Weather frame
     RTP_tSTARTTIME(weatherframe_time, curr_time);
-    { D3_PHASE(weather);
-    DoWeatherForFrame(); }
+    DoWeatherForFrame();
     RTP_tENDTIME(weatherframe_time, curr_time);
 
     // Ambient sounds
     RTP_tSTARTTIME(ambsound_frame_time, curr_time);
-    { D3_PHASE(sound);
-    DoAmbientSounds(); }
+    DoAmbientSounds();
     RTP_tENDTIME(ambsound_frame_time, curr_time);
 
     // Terrain sound
@@ -3109,8 +3048,7 @@ void GameFrame(void) {
     RTP_tSTARTTIME(renderframe_time, curr_time);
     if (!Skip_render_game_frame) {
       // Render the frame
-      { D3_PHASE(render);
-      GameRenderFrame(); }
+      GameRenderFrame();
     }
     RTP_tENDTIME(renderframe_time, curr_time);
   }
@@ -3118,8 +3056,7 @@ void GameFrame(void) {
   if (!Game_paused) {
     // Do pending events
     RTP_tSTARTTIME(normalevent_time, curr_time);
-    { D3_PHASE(events);
-    ProcessNormalEvents(); }
+    ProcessNormalEvents();
     RTP_tENDTIME(normalevent_time, curr_time);
 
     // float start_delay = timer_GetTime();
@@ -3127,26 +3064,6 @@ void GameFrame(void) {
 
     int64_t current_timer;
     uint32_t sleeptime;
-#ifdef D3_PERF_LOG
-    {
-      Uint64 const now = SDL_GetTicksNS();
-      g_phase.frames++;
-      if (g_phase.reportAt == 0) {
-        g_phase.reportAt = now + 2000000000ULL;
-      } else if (now >= g_phase.reportAt) {
-        double const f = (double)g_phase.frames;
-        LOG_WARNING.printf("PHASE ms/frame: render %.1f = mainview %.1f + hud %.1f "
-                           "[items %.1f + cockpit %.1f + reticle %.1f] | %.0f viewport changes/frame",
-                           g_phase.render / f / 1.0e6, g_phase.mainview / f / 1.0e6, g_phase.hud / f / 1.0e6,
-                           g_phase.huditems / f / 1.0e6, g_phase.cockpit / f / 1.0e6,
-                           g_phase.reticle / f / 1.0e6, D3_startFrames / f);
-        LOG_WARNING.printf("PHASE clears: %.0f depth clears/frame costing %.1f ms/frame",
-                           D3_depthClears / f, D3_depthClearNs / f / 1.0e6);
-        g_phase = PhaseTimes{};
-        g_phase.reportAt = now + 2000000000ULL;
-      }
-    }
-#endif
     current_timer = timer_GetMSTime();
     if ((current_timer - last_timer) < Min_allowed_frametime) {
       sleeptime = (uint32_t)Min_allowed_frametime - (current_timer - last_timer);

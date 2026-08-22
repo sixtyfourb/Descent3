@@ -1453,10 +1453,6 @@ void rend_SetTextureType(texture_type state) {
 
 static bool GDepthClearedThisFrame = false;
 
-#ifdef D3_PERF_LOG
-unsigned long long D3_depthClears = 0;
-unsigned long long D3_depthClearNs = 0;
-#endif
 
 void rend_StartFrame(int x1, int y1, int x2, int y2, int clear_flags) {
 #ifdef __ANDROID__
@@ -1468,14 +1464,7 @@ void rend_StartFrame(int x1, int y1, int x2, int y2, int clear_flags) {
   // frame is what the render actually needs.
   if ((clear_flags & RF_CLEAR_ZBUFFER) && !GDepthClearedThisFrame) {
     GDepthClearedThisFrame = true;
-#ifdef D3_PERF_LOG
-    Uint64 const t0 = SDL_GetTicksNS();
-#endif
     dglClear(GL_DEPTH_BUFFER_BIT);
-#ifdef D3_PERF_LOG
-    D3_depthClears++;
-    D3_depthClearNs += SDL_GetTicksNS() - t0;
-#endif
   }
   gpu_state.clip_x1 = x1;
   gpu_state.clip_y1 = y1;
@@ -1484,14 +1473,7 @@ void rend_StartFrame(int x1, int y1, int x2, int y2, int clear_flags) {
   return;
 #endif
   if (clear_flags & RF_CLEAR_ZBUFFER) {
-#ifdef D3_PERF_LOG
-    Uint64 const t0 = SDL_GetTicksNS();
-#endif
     dglClear(GL_DEPTH_BUFFER_BIT);
-#ifdef D3_PERF_LOG
-    D3_depthClears++;
-    D3_depthClearNs += SDL_GetTicksNS() - t0;
-#endif
   }
   gpu_state.clip_x1 = x1;
   gpu_state.clip_y1 = y1;
@@ -1551,49 +1533,7 @@ void rend_Flip() {
     dglBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
-#ifdef D3_PERF_LOG
-  // Where does a frame go? Time the swap separately: that is where the
-  // driver blocks waiting for the GPU, so a large share there means we are
-  // waiting on the GPU rather than spending CPU in the engine.
-  {
-    static Uint64 frames = 0, drawNs = 0, swapNs = 0, polys = 0, reportAt = 0;
-    static Uint64 uploads = 0, verts = 0;
-    static Uint64 frameStart = 0;
-    Uint64 const beforeSwap = SDL_GetTicksNS();
-
-    if (frameStart != 0) {
-      drawNs += beforeSwap - frameStart;
-    }
-
-    SDL_GL_SwapWindow(GSDLWindow);
-
-    Uint64 const afterSwap = SDL_GetTicksNS();
-    swapNs += afterSwap - beforeSwap;
-    frameStart = afterSwap;
-    frames++;
-    polys += (Uint64)gpu_last_frame_polys_drawn;
-    uploads += (Uint64)gpu_last_uploaded;
-    verts += (Uint64)gpu_last_frame_verts_processed;
-
-    if (reportAt == 0) {
-      reportAt = afterSwap + 2000000000ULL;
-    } else if (afterSwap >= reportAt) {
-      double const secs = (double)(drawNs + swapNs) / 1.0e9;
-      LOG_WARNING.printf("PERF: %.1f fps | frame %.1f ms = engine %.1f + swap %.1f | %llu polys %llu verts %llu texture uploads per frame",
-                         frames / (secs > 0 ? secs : 1),
-                         (double)(drawNs + swapNs) / frames / 1.0e6,
-                         (double)drawNs / frames / 1.0e6,
-                         (double)swapNs / frames / 1.0e6,
-                         (unsigned long long)(polys / frames),
-                         (unsigned long long)(verts / frames),
-                         (unsigned long long)(uploads / frames));
-      frames = drawNs = swapNs = polys = uploads = verts = 0;
-      reportAt = afterSwap + 2000000000ULL;
-    }
-  }
-#else
   SDL_GL_SwapWindow(GSDLWindow);
-#endif
 
   // go back to drawing on the FBO until we want to blit to the window framebuffer again.
   if (GOpenGLFBO != 0) {
