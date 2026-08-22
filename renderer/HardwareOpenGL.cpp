@@ -105,10 +105,16 @@ struct Renderer {
 
   void setTextureEnabled(GLuint index, bool enabled) {
     GLint bit = 1 << index;
+    GLint const before = texture_enable_;
     if (enabled) {
       texture_enable_ |= bit;
     } else {
       texture_enable_ &= ~bit;
+    }
+    // Every polygon disables the second texture whether or not it was enabled,
+    // so without this the uniform is rewritten on every draw for nothing.
+    if (texture_enable_ == before) {
+      return;
     }
     shader_.setUniform1i("u_texture_enable", texture_enable_);
   }
@@ -124,9 +130,14 @@ struct Renderer {
                                      typename std::iterator_traits<VertexIter>::value_type, PosColorUVVertex>>>
   size_t addVertexData(VertexIter begin, VertexIter end, PosColorUVVertex_tag = {}) {
     std::array<PosColorUV2Vertex, MAX_POINTS_IN_POLY> converted;
+    auto const count = std::distance(begin, end);
     std::transform(begin, end, converted.begin(),
                    [](auto const &vtx) { return PosColorUV2Vertex{vtx.pos, vtx.color, vtx.uv, {}}; });
-    return shader_.addVertexData(converted.cbegin(), converted.cend());
+    // Only the vertices that were converted. Uploading the whole array meant
+    // every polygon - usually three or four vertices - mapped and wrote a
+    // hundred, and walked the ring buffer twenty-five times faster than it
+    // needed to. Cheap on a desktop driver, not cheap on a tiler.
+    return shader_.addVertexData(converted.cbegin(), converted.cbegin() + count);
   }
 
   void setFogEnabled(bool enabled) { shader_.setUniform1i("u_fog_enable", enabled); }

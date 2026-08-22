@@ -22,6 +22,7 @@
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -135,9 +136,18 @@ struct OrphaningVertexBuffer : VertexBuffer<V> {
     }
 
     auto start = nextVertex_;
-    V* mapped = reinterpret_cast<V*>(dglMapBufferRange(GL_ARRAY_BUFFER, start * sizeof(V), dist * sizeof(V), GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT));
-    std::copy(begin, end, mapped);
-    dglUnmapBuffer(GL_ARRAY_BUFFER);
+
+    // A map/unmap pair per polygon is a lot of driver round trips - a few
+    // thousand a frame - and an unsynchronised map is exactly the kind of thing
+    // a tile-based GPU can decide to wait on. glBufferSubData says the same
+    // thing in one call and leaves the queueing to the driver.
+    if constexpr (std::is_trivially_copyable_v<V>) {
+      dglBufferSubData(GL_ARRAY_BUFFER, start * sizeof(V), dist * sizeof(V), &(*begin));
+    } else {
+      V* mapped = reinterpret_cast<V*>(dglMapBufferRange(GL_ARRAY_BUFFER, start * sizeof(V), dist * sizeof(V), GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT));
+      std::copy(begin, end, mapped);
+      dglUnmapBuffer(GL_ARRAY_BUFFER);
+    }
 
     nextVertex_ += dist;
     return start;
