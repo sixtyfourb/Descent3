@@ -394,8 +394,9 @@ bool sdlMouseWheelFilter(SDL_Event const *event) {
 // the absolute position is touched; the deltas the flight controls read are
 // left alone.
 // How far a fully deflected look stick turns the view, in mouse travel per
-// second. Matched by eye against a brisk turn.
-static const float kPadLookRate = 900.0f;
+// second. The gamepad's own sensitivity has already been applied to the value
+// by the time it arrives, so this only sets where that slider's middle lands.
+static const float kPadLookRate = 1500.0f;
 
 // A gamepad reports an axis only when it changes, so a stick held over sends
 // nothing further. Fed in as one-off mouse motion that turned the view in jumps
