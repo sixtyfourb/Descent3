@@ -870,6 +870,38 @@ void DoKeyboardMovement(game_controls *controls) {
 //	handler.  So we adjust those values in this function based off of the remaining
 //	controller element stataes.
 
+#ifdef __ANDROID__
+/*
+ * The touch sticks and the gamepad reach the game through the touch layer, not
+ * as a joystick the controller system knows about, so their deflection is held
+ * here and added where the axes are read. Full deflection is full thrust - the
+ * same units the POV buttons use just below - so nothing needs scaling.
+ *
+ * They used to be turned into presses of the thrust keys, which meant a stick
+ * was either off or hard over with nothing in between.
+ */
+static float D3_touch_fwd = 0.0f;
+static float D3_touch_side = 0.0f;
+static float D3_touch_vert = 0.0f;
+static float D3_touch_bank = 0.0f;
+
+static float d3_clamp_axis(float value) {
+  if (value > 1.0f)
+    return 1.0f;
+  if (value < -1.0f)
+    return -1.0f;
+
+  return value;
+}
+
+extern "C" void d3_touch_set_pad_move(float fwd, float side, float vert, float bank) {
+  D3_touch_fwd = d3_clamp_axis(fwd);
+  D3_touch_side = d3_clamp_axis(side);
+  D3_touch_vert = d3_clamp_axis(vert);
+  D3_touch_bank = d3_clamp_axis(bank);
+}
+#endif
+
 void DoControllerMovement(game_controls *controls) {
   ct_packet ctl_x, ctl_y, ctl_z, ctl_p, ctl_b, ctl_h;
   ct_packet ctl_povl, ctl_povr, ctl_povu, ctl_povd, ctl_fb, ctl_rb;
@@ -968,6 +1000,13 @@ void DoControllerMovement(game_controls *controls) {
   if (ctl_povl.value) {
     controls->sideways_thrust -= (1.0f);
   }
+
+#ifdef __ANDROID__
+  controls->forward_thrust += D3_touch_fwd;
+  controls->sideways_thrust += D3_touch_side;
+  controls->vertical_thrust += D3_touch_vert;
+  controls->bank_thrust += D3_touch_bank;
+#endif
 }
 
 //	---------------------------------------------------------------------------
