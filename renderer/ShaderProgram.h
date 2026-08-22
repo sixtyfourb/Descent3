@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <functional>
 #include <stdexcept>
@@ -115,6 +116,11 @@ private:
   MoveOnlyHolder<GLuint, DeleteBuffer> vbo_;
 };
 
+#ifdef D3_PERF_LOG
+#include <chrono>
+extern unsigned long long D3_bindNs;
+#endif
+
 // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming#Buffer_update
 template <typename V>
 struct OrphaningVertexBuffer : VertexBuffer<V> {
@@ -124,7 +130,14 @@ struct OrphaningVertexBuffer : VertexBuffer<V> {
   template <typename VertexIter,
             typename = std::enable_if<std::is_convertible_v<typename std::iterator_traits<VertexIter>::value_type, V>>>
   size_t AddVertexData(VertexIter begin, VertexIter end) {
+#ifdef D3_PERF_LOG
+    { auto b0 = std::chrono::steady_clock::now();
+      this->bind();
+      D3_bindNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - b0).count(); }
+#else
     this->bind();
+#endif
 
     auto dist = std::distance(begin, end);
     if (nextVertex_ + dist >= kVertexCount) {
@@ -134,6 +147,25 @@ struct OrphaningVertexBuffer : VertexBuffer<V> {
               kBufferType);
       nextVertex_ = 0;
     }
+
+#ifdef __ANDROID__
+    // PowerVR will not let a buffer be modified once the render pass in flight
+    // has read from it: to keep the pending draws' data valid the driver
+    // flushes the tile pipeline and waits. That measured about a millisecond
+    // per polygon, identically whether the write went through glMapBufferRange
+    // or glBufferSubData, and regardless of how many bytes moved or how large
+    // the buffer was - the tell-tale of a pipeline kick rather than a copy.
+    // Replacing the buffer's storage outright is the documented way out: the
+    // driver hands back fresh memory, nothing in flight refers to it, and
+    // there is nothing to wait for.
+    if (dist <= static_cast<decltype(dist)>(kStagingVertices)) {
+      std::array<V, kStagingVertices> staging;
+      std::copy(begin, end, staging.begin());
+      dglBufferData(GL_ARRAY_BUFFER, dist * sizeof(V), staging.data(), kBufferType);
+      nextVertex_ = 0;
+      return 0;
+    }
+#endif
 
     auto start = nextVertex_;
 
@@ -146,8 +178,21 @@ struct OrphaningVertexBuffer : VertexBuffer<V> {
   }
 
 private:
+#ifdef __ANDROID__
+  // PowerVR (and mobile drivers generally) ghost a buffer that is sub-updated
+  // after it has been used in the frame: the driver copies the whole thing so
+  // the pending draws keep their data. At 65536 vertices that is a 3.9MB copy
+  // per polygon - about a millisecond each, measured. A small buffer makes the
+  // copy trivial and the wrap-around orphaning (glBufferData with no data) the
+  // common case, which is the documented fast path.
+  static constexpr size_t kVertexCount{1024};
+#else
   static constexpr size_t kVertexCount{1 << 16};
+#endif
   static constexpr GLenum kBufferType{GL_STREAM_DRAW};
+  // A polygon is at most MAX_POINTS_IN_POLY (100) vertices; anything larger
+  // falls back to the ring buffer.
+  static constexpr size_t kStagingVertices{128};
   size_t nextVertex_{};
 };
 
