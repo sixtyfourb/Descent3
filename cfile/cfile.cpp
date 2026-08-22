@@ -30,6 +30,7 @@
 
 #include "byteswap.h"
 #include "crossplat.h"
+#include "android_saf.h"
 #include "cfile.h"
 #include "default_base_directories.h"
 #include "ddio.h"
@@ -92,7 +93,11 @@ void cf_AddDefaultBaseDirectories() {
  * from this module.
  */
 void cf_AddBaseDirectory(const std::filesystem::path &base_directory) {
+#ifdef __ANDROID__
+  if (D3::android::is_directory(base_directory)) {
+#else
   if (std::filesystem::exists(base_directory) && std::filesystem::is_directory(base_directory)) {
+#endif
     // Only once. A directory listed twice is found twice by everything that
     // walks these paths, so the mission list shows two of every mission and the
     // level list two of every level. It is easy to arrive at by accident: a
@@ -139,7 +144,11 @@ std::filesystem::path cf_LocatePathCaseInsensitiveHelper(const std::filesystem::
   }
 #else
   // Dumb check, maybe there already all ok?
+#ifdef __ANDROID__
+  if (D3::android::exists(starting_dir / relative_path)) {
+#else
   if (exists((starting_dir / relative_path))) {
+#endif
     return starting_dir / relative_path;
   }
 
@@ -148,6 +157,21 @@ std::filesystem::path cf_LocatePathCaseInsensitiveHelper(const std::filesystem::
   search_path = starting_dir / relative_path.parent_path();
   search_file = relative_path.filename();
 
+#ifdef __ANDROID__
+  // Everything here goes through libc rather than std::filesystem so that a
+  // folder behind the Storage Access Framework can be read - see android_saf.h.
+  if (!D3::android::is_directory(search_path) || search_file.empty()) {
+    return {};
+  }
+
+  for (const std::string &name : D3::android::list_directory(search_path)) {
+    if (stricmp(name.c_str(), (const char *)search_file.u8string().c_str()) == 0) {
+      return search_path / name;
+    }
+  }
+
+  return {};
+#else
   // If directory does not exist, nothing to search.
   if (!std::filesystem::is_directory(search_path) || search_file.empty()) {
     return {};
@@ -171,6 +195,7 @@ std::filesystem::path cf_LocatePathCaseInsensitiveHelper(const std::filesystem::
   }
 
   return result;
+#endif
 #endif
 }
 

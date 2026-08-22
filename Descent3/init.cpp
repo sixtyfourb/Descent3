@@ -1449,9 +1449,20 @@ void InitIOSystems(bool editor) {
     cf_AddBaseDirectory(config_base_directory);
   }
 
+#ifdef __ANDROID__
+  // The game folder, straight from the launcher. Everywhere else this is found
+  // by way of the working directory, which cannot be used here: the folder may
+  // be reached through the Storage Access Framework, and chdir() into one of
+  // those is not something the shim can offer.
+  if (const char *android_dir = getenv("D3_LOCAL"); android_dir != nullptr) {
+    cf_AddBaseDirectory(android_dir);
+  }
+  std::filesystem::path platform_dir;
+#else
   // Platform dependent paths
   std::filesystem::path platform_dir = std::filesystem::canonical(D3_DATADIR);
   cf_AddBaseDirectory(platform_dir);
+#endif
   // TODO: add Steam/registry locations
 
   // Add path of executable

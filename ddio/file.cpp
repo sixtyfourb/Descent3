@@ -26,6 +26,7 @@
 
 #include "IOOps.h"
 #include "chrono_timer.h"
+#include "android_saf.h"
 #include "ddio.h"
 #include "mem.h"
 #include "pserror.h"
@@ -147,6 +148,22 @@ bool ddio_DeleteLockFile(const std::filesystem::path &dir) {
 
 void ddio_DoForeachFile(const std::filesystem::path &search_path, const std::regex &regex,
                        const std::function<void(std::filesystem::path)> &func) {
+#ifdef __ANDROID__
+  // libc rather than std::filesystem, so that a folder behind the Storage
+  // Access Framework can be read - see android_saf.h. directory_iterator does
+  // not just come up empty on one of those, it throws.
+  if (!D3::android::is_directory(search_path)) {
+    return;
+  }
+
+  for (const std::string &filename : D3::android::list_directory(search_path)) {
+    const std::filesystem::path entry = search_path / filename;
+
+    if (D3::android::is_regular_file(entry) && std::regex_match(filename, regex)) {
+      func(entry);
+    }
+  }
+#else
   if (!std::filesystem::is_directory(search_path)) {
     return;
   }
@@ -159,6 +176,7 @@ void ddio_DoForeachFile(const std::filesystem::path &search_path, const std::reg
       }
     }
   }
+#endif
 }
 
 std::filesystem::path ddio_GetTmpFileName(const std::filesystem::path &basedir, const char *prefix) {
