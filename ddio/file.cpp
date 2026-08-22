@@ -19,6 +19,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <system_error>
 #include <fstream>
 #include <iterator>
 #include <regex>
@@ -53,14 +54,16 @@ std::istream &operator>>(std::istream &input, LockFileContent &header) {
 bool ddio_CreateLockFile(const std::filesystem::path &dir) {
   std::filesystem::path lock_filename = dir / ".lock";
 
-  if (!std::filesystem::is_directory(lock_filename.parent_path())) {
+  std::error_code ec;
+
+  if (!std::filesystem::is_directory(lock_filename.parent_path(), ec)) {
     return false;
   }
 
   LockFileContent lock_content;
   int32_t curr_pid = ddio_GetPID();
 
-  if (std::filesystem::exists(lock_filename)) {
+  if (std::filesystem::exists(lock_filename, ec)) {
     try {
       std::ifstream lockfile(lock_filename, std::ios::binary);
       lockfile >> lock_content;
@@ -112,7 +115,8 @@ bool ddio_DeleteLockFile(const std::filesystem::path &dir) {
   int32_t curr_pid = ddio_GetPID();
 
   std::filesystem::path lock_filename = dir / ".lock";
-  if (!std::filesystem::exists(lock_filename)) {
+  std::error_code ec;
+  if (!std::filesystem::exists(lock_filename, ec)) {
     return true;
   }
 
@@ -137,7 +141,6 @@ bool ddio_DeleteLockFile(const std::filesystem::path &dir) {
     return false;
   }
 
-  std::error_code ec;
   // the lock file in the directory belongs to us!
   if (!std::filesystem::remove(lock_filename, ec)) {
     return false;
@@ -201,7 +204,8 @@ std::filesystem::path ddio_GetTmpFileName(const std::filesystem::path &basedir, 
     }
     random_name[len_result + len] = '\0';
     strcat(random_name, ext);
-    if (!std::filesystem::exists(random_name)) {
+    std::error_code exists_ec;
+    if (!std::filesystem::exists(random_name, exists_ec)) {
       // Found unique name, break the loop
       result = random_name;
       break;
@@ -218,7 +222,14 @@ std::filesystem::path ddio_GetPrefPath(const char *org, const char *app) {
     LOG_ERROR << "Failed to get writable preference path!";
     return {};
   }
-  std::filesystem::path result = std::filesystem::canonical(pref_path);
+  // canonical throws if it cannot resolve the path, which is not worth dying
+  // for: the path SDL gave is still the answer, just not tidied up.
+  std::error_code ec;
+  std::filesystem::path result = std::filesystem::canonical(pref_path, ec);
+  if (ec) {
+    LOG_WARNING << "Could not resolve preference path " << pref_path << ": " << ec.message();
+    result = pref_path;
+  }
   SDL_free(pref_path);
   return result;
 }
@@ -229,6 +240,11 @@ std::filesystem::path ddio_GetBasePath() {
     LOG_ERROR << "Failed to get parent path of executable!";
     return {};
   }
-  std::filesystem::path result = std::filesystem::canonical(exe_path);
+  std::error_code ec;
+  std::filesystem::path result = std::filesystem::canonical(exe_path, ec);
+  if (ec) {
+    LOG_WARNING << "Could not resolve base path " << exe_path << ": " << ec.message();
+    result = exe_path;
+  }
   return result;
 }

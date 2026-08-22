@@ -25,6 +25,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <map>
 
@@ -222,7 +223,29 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR szCmdLine, int nC
 // than starting a process, so the entry point is a plain exported function.
 // Named to match the other engines here, which the glue already calls.
 extern "C" int dxx_main(int argc, char *argv[]);
+static int d3_main(int argc, char *argv[]);
+
+/*
+ * Anything thrown and not caught takes the whole process down through abort,
+ * which on Android means the game vanishes and the log holds a signal number
+ * rather than a reason. The file layer throws readily - std::filesystem reports
+ * a permission problem that way, and a folder full of files owned by someone
+ * else is an ordinary situation on this platform - so a game that cannot read
+ * one file should say so and stop, not disappear.
+ */
 extern "C" int dxx_main(int argc, char *argv[]) {
+  try {
+    return d3_main(argc, argv);
+  } catch (const std::exception &e) {
+    LOG_FATAL << "Unhandled exception, giving up: " << e.what();
+    return 1;
+  } catch (...) {
+    LOG_FATAL << "Unhandled exception of no known type, giving up";
+    return 1;
+  }
+}
+
+static int d3_main(int argc, char *argv[]) {
   GatherArgs(argv);
   bool enable_winconsole = false; // there is no console to write to
 #else

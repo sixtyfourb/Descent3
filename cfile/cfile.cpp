@@ -24,6 +24,7 @@
 #include <cstdarg>
 #include <cerrno>
 #include <filesystem>
+#include <system_error>
 #include <map>
 #include <memory>
 #include <vector>
@@ -203,13 +204,18 @@ std::vector<std::filesystem::path> cf_LocatePathMultiplePathsHelper(const std::f
                                                                     bool stop_after_first_result) {
   ASSERT(("realative_path should be a relative path.", relative_path.is_relative()));
   std::vector<std::filesystem::path> return_value = { };
+  // A path that cannot be looked at - no permission on something above it, say,
+  // which is an ordinary state of affairs on Android - is one that does not
+  // count, not a reason to throw out of the file layer and take the game with
+  // it. Same below, and in ddio.
+  std::error_code ec;
   for (auto base_directories_iterator = Base_directories.rbegin();
        base_directories_iterator != Base_directories.rend();
        ++base_directories_iterator) {
     ASSERT(("base_directory should be an absolute path.", base_directories_iterator->is_absolute()));
     auto to_append = cf_LocatePathCaseInsensitiveHelper(relative_path, *base_directories_iterator);
     ASSERT(("to_append should be either empty or an absolute path.", to_append.empty() || to_append.is_absolute()));
-    if (std::filesystem::exists(to_append)) {
+    if (std::filesystem::exists(to_append, ec)) {
       return_value.push_back(to_append);
       if (stop_after_first_result) {
         break;
@@ -371,10 +377,14 @@ void cf_Close() {
 
 bool cf_SetSearchPath(const std::filesystem::path &path, const std::vector<std::filesystem::path> &ext_list) {
   // Don't add non-existing path into search paths
-  if (!std::filesystem::is_directory(path))
+  std::error_code ec;
+  if (!std::filesystem::is_directory(path, ec))
     return false;
   // Get & store full path
-  paths.insert_or_assign(std::filesystem::absolute(path), !ext_list.empty());
+  const std::filesystem::path full_path = std::filesystem::absolute(path, ec);
+  if (ec)
+    return false;
+  paths.insert_or_assign(full_path, !ext_list.empty());
   // Set extensions for this path
   if (!ext_list.empty()) {
     for (auto const &ext : ext_list) {
@@ -539,7 +549,8 @@ CFILE *open_file_in_directory(const std::filesystem::path &filename, const char 
   CFILE *cfile;
   std::filesystem::path using_filename;
   char tmode[3] = "rb";
-  if (std::filesystem::is_directory(directory)) {
+  std::error_code ec;
+  if (std::filesystem::is_directory(directory, ec)) {
     // Make a full path
     using_filename = directory / filename;
   } else if (filename.is_absolute()) {
