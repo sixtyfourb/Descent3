@@ -1200,7 +1200,16 @@ void StartFrame(bool clear) {
   StartFrame(Game_window_x, Game_window_y, Game_window_x + Game_window_w, Game_window_y + Game_window_h, clear);
 }
 
+#ifdef D3_PERF_LOG
+// How many times a frame does the game change its viewport? Each one can make a
+// tile-based GPU resolve what it has so far.
+unsigned long long D3_startFrames = 0;
+#endif
+
 void StartFrame(int x, int y, int x2, int y2, bool clear, bool push_on_stack) {
+#ifdef D3_PERF_LOG
+  D3_startFrames++;
+#endif
   static float last_fov = -1;
   // Check to see if our FOV has changed since last frame
   if (last_fov != Render_FOV) {

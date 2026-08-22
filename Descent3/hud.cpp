@@ -1202,6 +1202,25 @@ void LoadHUDConfig(const char *filename, bool (*fn)(const char *, const char *, 
 //		draws stuff accordingly.
 //		render internal gauges too.
 
+#ifdef D3_PERF_LOG
+#include <SDL3/SDL_timer.h>
+extern void d3_phase_add(int slot, unsigned long long ns);
+namespace {
+struct HudScope {
+  int slot;
+  Uint64 start;
+  explicit HudScope(int s) : slot(s), start(SDL_GetTicksNS()) {}
+  ~HudScope() { d3_phase_add(slot, SDL_GetTicksNS() - start); }
+};
+} // namespace
+#define D3_PHASE(name) HudScope hud_scope_##name(D3_SLOT_##name)
+#define D3_SLOT_huditems 0
+#define D3_SLOT_cockpit 1
+#define D3_SLOT_reticle 2
+#else
+#define D3_PHASE(name) do {} while (0)
+#endif
+
 void RenderHUDFrame() {
   extern bool Guided_missile_smallview; // from smallviews.cpp
 
@@ -1222,29 +1241,45 @@ void RenderHUDFrame() {
   } else if (!(Players[Player_num].flags & PLAYER_FLAGS_REARVIEW)) {
     switch (GetHUDMode()) {
     case HUD_FULLSCREEN:
+      { D3_PHASE(huditems);
       RenderHUDItems(Hud_stat_mask);
+      }
+      { D3_PHASE(cockpit);
       RenderCockpit(); // needed to render animated deactivation sequence and should be dormant
+      }
       if (Game_toggles.show_reticle) {
+        { D3_PHASE(reticle);
         RenderReticle();
+        }
       }
       break;
 
     case HUD_COCKPIT:
+      { D3_PHASE(huditems);
       RenderHUDItems(Hud_stat_mask);
+      }
+      { D3_PHASE(cockpit);
       RenderCockpit(); // called when cockpit is activating and functioning.
+      }
       if (Game_toggles.show_reticle) {
+        { D3_PHASE(reticle);
         RenderReticle();
+        }
       }
       break;
 
     case HUD_LETTERBOX:
       if (!Cinematic_inuse)
+        { D3_PHASE(huditems);
         RenderHUDItems(Hud_stat_mask);
+        }
       break;
 
     case HUD_OBSERVER:
       if (!Cinematic_inuse)
+        { D3_PHASE(huditems);
         RenderHUDItems(Hud_stat_mask);
+        }
       break;
 
     default:
