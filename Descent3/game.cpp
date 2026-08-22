@@ -700,6 +700,13 @@ int Max_window_w, Max_window_h;
 // The game mode we're in (ie multiplayer vs. single, etc)
 int Game_mode = 0;
 
+#ifdef __ANDROID__
+// The touch layer needs to know whether a level is running: the menus are
+// mouse driven and want a pointer, while the game wants the flight controls.
+// Game_mode is GM_NONE outside a level.
+extern "C" int d3_touch_in_game(void) { return Game_mode != GM_NONE; }
+#endif
+
 int sound_override_force_field = -1;
 int sound_override_glass_breaking = -1;
 

@@ -387,6 +387,27 @@ bool sdlMouseWheelFilter(SDL_Event const *event) {
   return false;
 }
 
+#ifdef __ANDROID__
+// Put the cursor at a point given as a fraction of the window. A touchscreen
+// knows where the finger is, while this engine only ever accumulates relative
+// motion into a position - so rather than chase it with deltas, place it. Only
+// the absolute position is touched; the deltas the flight controls read are
+// left alone.
+extern "C" void d3_touch_move_mouse_to(float nx, float ny) {
+  DDIO_mouse_state.x = DDIO_mouse_state.l + nx * (DDIO_mouse_state.r - DDIO_mouse_state.l);
+  DDIO_mouse_state.y = DDIO_mouse_state.t + ny * (DDIO_mouse_state.b - DDIO_mouse_state.t);
+
+  if (DDIO_mouse_state.x < DDIO_mouse_state.l)
+    DDIO_mouse_state.x = DDIO_mouse_state.l;
+  if (DDIO_mouse_state.x >= DDIO_mouse_state.r)
+    DDIO_mouse_state.x = DDIO_mouse_state.r - 1;
+  if (DDIO_mouse_state.y < DDIO_mouse_state.t)
+    DDIO_mouse_state.y = DDIO_mouse_state.t;
+  if (DDIO_mouse_state.y >= DDIO_mouse_state.b)
+    DDIO_mouse_state.y = DDIO_mouse_state.b - 1;
+}
+#endif
+
 bool sdlMouseMotionFilter(SDL_Event const *event) {
   if (event->type == SDL_EVENT_JOYSTICK_BALL_MOTION) {
     DDIO_mouse_state.dx = event->jball.xrel / 100.0f;
