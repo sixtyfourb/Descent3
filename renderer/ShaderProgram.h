@@ -85,7 +85,14 @@ struct VertexBuffer {
   }
 
 protected:
+  // Bind the vertex array as well as the buffer. The attribute pointers live
+  // in the vertex array object, which used to be set up once in the
+  // constructor and relied upon forever - which holds only while nothing
+  // else in the process touches GL. On Android the touch overlay draws with
+  // its own vertex arrays between frames, so by the next draw the engine's
+  // array is no longer bound and its attributes are gone.
   void bind() {
+    dglBindVertexArray(vao_);
     dglBindBuffer(GL_ARRAY_BUFFER, vbo_);
   }
 

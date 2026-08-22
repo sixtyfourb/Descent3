@@ -216,15 +216,6 @@ extern renderer_preferred_state gpu_preferred_state;
 bool OpenGL_multitexture_state = false;
 module *OpenGLDLLHandle = nullptr;
 int Already_loaded = 0;
-// A screen clear should leave an opaque frame. On Android the window surface is
-// composited by the system, so alpha 0 means "transparent" rather than "black" -
-// see the alpha note in opengl_Setup.
-#ifdef __ANDROID__
-#define ANDROID_CLEAR_ALPHA 1.0f
-#else
-#define ANDROID_CLEAR_ALPHA 0.0f
-#endif
-
 bool opengl_Blending_on = false;
 
 static oeApplication *ParentApplication = nullptr;
@@ -415,12 +406,6 @@ int opengl_Setup(oeApplication *app, const int *width, const int *height) {
   SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-#ifdef __ANDROID__
-  // No alpha in the window surface. Android composites a SurfaceView that has
-  // an alpha channel with blending, and this engine clears to alpha 0 - so with
-  // one, everything it draws is composited away and the screen stays black.
-  SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
-#endif
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 #ifdef __ANDROID__
@@ -479,16 +464,6 @@ int opengl_Setup(oeApplication *app, const int *width, const int *height) {
       GSDLWindow = nullptr;
       return 0;
     }
-#if defined(__ANDROID__) && defined(D3_RENDER_DEBUG)
-    {
-      int ww = 0, wh = 0, pw = 0, ph = 0;
-      SDL_GetWindowSize(GSDLWindow, &ww, &wh);
-      SDL_GetWindowSizeInPixels(GSDLWindow, &pw, &ph);
-      LOG_WARNING.printf("ANDROID: asked for %dx%d, window %dx%d, pixels %dx%d, flags 0x%llx",
-                         winw, winh, ww, wh, pw, ph,
-                         (unsigned long long)SDL_GetWindowFlags(GSDLWindow));
-    }
-#endif
   }
 
   try {
@@ -1165,9 +1140,6 @@ void gpu_DrawFlatPolygon3D(g3Point **p, int nv) {
 
 // Sets the gamma correction value
 void rend_SetGammaValue(float val) {
-#if defined(__ANDROID__) && defined(D3_RENDER_DEBUG)
-  LOG_WARNING.printf("ANDROID gamma = %f", val);
-#endif
   gpu_preferred_state.gamma = val;
   gRenderer->setGammaCorrection(val);
   LOG_DEBUG.printf("Setting gamma to %f", val);
@@ -1372,21 +1344,6 @@ void gpu_RenderPolygon(PosColorUVVertex *vData, uint32_t nv) {
     gRenderer->setTextureEnabled(0, true);
   }
 
-#if defined(__ANDROID__) && defined(D3_RENDER_DEBUG)
-  {
-    static int once = 0;
-    if (once < 4 && nv >= 3) {
-      once++;
-      LOG_WARNING.printf("ANDROID poly nv=%u glerr=0x%x v0=(%.1f,%.1f,%.1f) uv=(%.2f,%.2f) rgba=(%.2f,%.2f,%.2f,%.2f) v2=(%.1f,%.1f,%.1f)",
-                         nv, dglGetError(),
-                         vData[0].pos.x(), vData[0].pos.y(), vData[0].pos.z(),
-                         vData[0].uv.s, vData[0].uv.t,
-                         vData[0].color.r, vData[0].color.g, vData[0].color.b, vData[0].color.a,
-                         vData[2].pos.x(), vData[2].pos.y(), vData[2].pos.z());
-    }
-  }
-#endif
-
   OpenGL_polys_drawn++;
   OpenGL_verts_processed += nv;
 }
@@ -1540,26 +1497,6 @@ void rend_Flip() {
     dglClear(GL_COLOR_BUFFER_BIT); // in case the Steam Overlay wrote to places we don't blit over.
     dglBlitFramebuffer(0, 0, GOpenGLFBOWidth, GOpenGLFBOHeight, centeredX, centeredY, centeredX + scaledWidth,
                        centeredY + scaledHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-#if defined(__ANDROID__) && defined(D3_RENDER_DEBUG)
-      {
-        // Read the FBO back: is it black because nothing was drawn, or
-        // because the blit or the present is losing it?
-        unsigned char px[16];
-        dglBindFramebuffer(GL_READ_FRAMEBUFFER, GOpenGLFBO);
-        dglReadPixels(GOpenGLFBOWidth / 2, GOpenGLFBOHeight / 2, 2, 2, GL_RGBA, GL_UNSIGNED_BYTE, px);
-        unsigned char pxw[16];
-        dglBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        dglReadPixels(w / 2, h / 2, 2, 2, GL_RGBA, GL_UNSIGNED_BYTE, pxw);
-        dglBindFramebuffer(GL_READ_FRAMEBUFFER, GOpenGLFBO);
-        static int reported = 0;
-        if ((reported++ % 300) == 0) {
-          LOG_WARNING.printf("ANDROID blit: fbo %ux%u -> window %dx%d at (%d,%d) %dx%d, polys %d, glerr 0x%x",
-                             GOpenGLFBOWidth, GOpenGLFBOHeight, w, h, centeredX, centeredY,
-                             scaledWidth, scaledHeight, gpu_last_frame_polys_drawn, dglGetError());
-          LOG_WARNING.printf("ANDROID fbo centre %02x%02x%02x  window centre %02x%02x%02x", px[0], px[1], px[2], pxw[0], pxw[1], pxw[2]);
-        }
-      }
-#endif
     dglBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
@@ -1601,7 +1538,7 @@ void rend_ClearScreen(ddgr_color color) {
   int g = (color >> 8 & 0xFF);
   int b = (color & 0xFF);
 
-  dglClearColor((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, ANDROID_CLEAR_ALPHA);
+  dglClearColor((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 0);
 
   dglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
@@ -1629,7 +1566,7 @@ void rend_FillRect(ddgr_color color, int x1, int y1, int x2, int y2) {
 
   dglEnable(GL_SCISSOR_TEST);
   dglScissor(x1, gpu_state.screen_height - (height + y1), width, height);
-  dglClearColor((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, ANDROID_CLEAR_ALPHA);
+  dglClearColor((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 0);
   dglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   width = gpu_state.clip_x2 - gpu_state.clip_x1;
