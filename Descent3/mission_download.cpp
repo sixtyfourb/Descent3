@@ -136,6 +136,7 @@
 #include "stringtable.h"
 #include "grtext.h"
 #include "Mission.h"
+#include "manage.h"
 #include "mission_download.h"
 #include "multi_dll_mgr.h"
 #include "pserror.h"
@@ -600,9 +601,27 @@ int msn_CheckGetMission(network_address *net_addr, char *filename) {
   // Don't download local missions
   std::filesystem::path pathname;
   pathname = D3MissionsDir / filename;
-  if (cfexist(filename) || cfexist(pathname)) {
+
+  // Also the mission directory rebuilt from the base directory. D3MissionsDir is
+  // composed in InitMission, which can run before the base directory is known -
+  // and if it is stale or empty the mission is not found, the client concludes it
+  // does not have a mission it does have, and offers to download it instead.
+  std::filesystem::path from_base = std::filesystem::path(LocalD3Dir) / "missions" / filename;
+
+  // And the relative form, which is how the rest of the game finds a mission -
+  // cfile resolves it against its search paths. The absolute ones are built from
+  // LocalD3Dir, which is not the game folder here: it comes out as the app's own
+  // files directory, so a mission that is present looked missing and the client
+  // offered to download it.
+  std::filesystem::path relative = std::filesystem::path("missions") / filename;
+
+  if (cfexist(filename) || cfexist(pathname) || cfexist(from_base) || cfexist(relative)) {
     return 1;
   }
+
+  LOG_WARNING.printf("msn_CheckGetMission: no %s (tried bare, \"%s\", \"%s\", \"%s\")", filename,
+                     pathname.u8string().c_str(), from_base.u8string().c_str(),
+                     relative.u8string().c_str());
 
   msn_urls *murls;
 
