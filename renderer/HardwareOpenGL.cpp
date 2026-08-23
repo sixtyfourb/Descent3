@@ -525,7 +525,11 @@ int opengl_Setup(oeApplication *app, const int *width, const int *height) {
 
   dglGenRenderbuffers(1, &GOpenGLRBODepth);
   dglBindRenderbuffer(GL_RENDERBUFFER, GOpenGLRBODepth);
-  dglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, w, h);
+  // 24-bit depth, not 16: everything on Android renders into this FBO, and at
+  // Descent 3's view distances a 16-bit depth buffer z-fights badly - geometry
+  // punches through walls and objects show through each other. GLES 3.0 requires
+  // DEPTH_COMPONENT24 as a renderbuffer format, so this is not a gamble.
+  dglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h);
   dglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, GOpenGLRBODepth);
 
   if (dglCheckFramebufferStatus(GL_FRAMEBUFFER_EXT) != GL_FRAMEBUFFER_COMPLETE_EXT) {
@@ -1453,6 +1457,9 @@ void rend_SetTextureType(texture_type state) {
 
 static bool GDepthClearedThisFrame = false;
 
+// Not any real state value, so setting a cache to it forces the next set through.
+static constexpr int8_t kStateCacheInvalid = 0x7F;
+
 
 void rend_StartFrame(int x1, int y1, int x2, int y2, int clear_flags) {
 #ifdef __ANDROID__
@@ -1541,6 +1548,28 @@ void rend_Flip() {
     dglViewport(0, 0, GOpenGLFBOWidth, GOpenGLFBOHeight);
     dglScissor(0, 0, GOpenGLFBOWidth, GOpenGLFBOHeight);
   }
+
+#ifdef __ANDROID__
+  // The touch overlay draws from inside SDL_GL_SwapWindow, through a swap-buffer
+  // callback, and its setup (gl_startRender) turns depth testing off and blending
+  // on with its own blend function - putting neither back. This renderer caches
+  // its GL state to skip redundant calls, so whatever the overlay left in force
+  // stayed in force until the game next happened to toggle that state - and the
+  // world is drawn before anything toggles it. With no depth test, the order the
+  // rooms happen to be traversed in is all that decides what wins, which is why
+  // ceilings, lights and missiles from beyond a wall drew over the top of it.
+  //
+  // Invalidate the two caches and set them again through the engine's own
+  // setters, so that the GL state matches what the cache claims.
+  int8_t const zstate = gpu_state.cur_zbuffer_state;
+  gpu_state.cur_zbuffer_state = kStateCacheInvalid;
+  rend_SetZBufferState(zstate);
+
+  int8_t const atype = gpu_state.cur_alpha_type;
+  gpu_state.cur_alpha_type = kStateCacheInvalid;
+  opengl_Blending_on = true; // the overlay left GL_BLEND enabled
+  rend_SetAlphaType(atype);
+#endif
 }
 
 void rend_EndFrame() {}
