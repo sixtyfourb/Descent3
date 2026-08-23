@@ -573,8 +573,31 @@ bool InitGameModule(const char *name, module *mod) {
 
   // Open the hog file
   if (!cf_OpenLibrary(lib_name)) {
-    tmp_dll_name = cf_LocatePath(lib_name).u8string().c_str();
-    Multi_game_dll_name.clear();
+    // Not a hog, so the file is the module itself. Copy it out and load the copy,
+    // rather than loading it where it lies: dlopen resolves its argument through
+    // the dynamic linker, which knows nothing of cfile - so on Android a module
+    // under scoped storage cannot be opened at all ("dlopen failed: library
+    // .../netgames/anarchy.d3m not found"), and even a real path there is on a
+    // filesystem the platform will not grant execute on. The temp directory is
+    // app-private, which it will. The hog branch below already works this way.
+    std::filesystem::path module_path = cf_LocatePath(lib_name);
+
+    if (module_path.empty()) {
+      LOG_WARNING.printf("Couldn't locate module %s!", lib_name.u8string().c_str());
+      return false;
+    }
+
+    tmp_dll_name = ddio_GetTmpFileName(Descent3_temp_directory, "d3m");
+    if (tmp_dll_name.empty()) {
+      return false;
+    }
+
+    if (!cf_CopyFile(tmp_dll_name, module_path)) {
+      LOG_WARNING << "DLL copy failed!";
+      return false;
+    }
+
+    Multi_game_dll_name = tmp_dll_name;
     goto loaddll;
   }
   // get a temp file name
