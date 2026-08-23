@@ -222,6 +222,37 @@ uint16_t *opengl_packed_Translate_table = nullptr;
 uint16_t *opengl_packed_4444_translate_table = nullptr;
 
 extern rendering_state gpu_state;
+
+// Not any real state value, so setting a cache to it forces the next set through.
+static constexpr int8_t kStateCacheInvalid = 0x7F;
+
+#ifdef __ANDROID__
+// Descent 3 asks for a depth clear about a hundred and sixty times a frame:
+// rend_StartFrame defaults to RF_CLEAR_ZBUFFER and every 2D element starts a
+// frame of its own. Clearing depth mid-render makes a tile-based GPU resolve the
+// tile buffer to memory and read it back - cheap on a desktop or an
+// immediate-mode mobile GPU, ruinous on a tiler.
+//
+// Collapsing them to one clear a frame was wrong: the game genuinely clears
+// depth more than once, before drawing the cockpit over the world for one, and
+// suppressing those let the world occlude what was meant to sit in front of it.
+//
+// So the request is recorded and paid for at the first draw that can actually
+// observe depth. A draw with the depth test off neither reads nor writes depth -
+// GL only updates the depth buffer when the test is enabled - so a pending clear
+// can wait behind any number of them, which is exactly what the 2D elements are.
+// Every clear the render depends on still happens, in the right place.
+static bool GDepthClearPending = false;
+
+static void FlushPendingDepthClear() {
+  if (GDepthClearPending && gpu_state.cur_zbuffer_state) {
+    GDepthClearPending = false;
+    dglClear(GL_DEPTH_BUFFER_BIT);
+  }
+}
+#else
+static void FlushPendingDepthClear() {}
+#endif
 extern renderer_preferred_state gpu_preferred_state;
 
 bool OpenGL_multitexture_state = false;
@@ -264,6 +295,12 @@ int opengl_MakeTextureObject(int tn) {
   dglActiveTexture(GL_TEXTURE0_ARB + tn);
 
   dglBindTexture(GL_TEXTURE_2D, num);
+  // Creating a texture object binds it, so the cache has to say so. Otherwise it
+  // still names whatever was bound before, and the next draw that wants that
+  // texture skips its bind as redundant and draws with this one instead - which
+  // showed up as the cockpit wearing a wall's texture on levels where textures
+  // are still being paged in.
+  OpenGL_last_bound[tn] = num;
   dglPixelStorei(GL_UNPACK_ALIGNMENT, 2);
 
   dglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -1352,6 +1389,7 @@ void gpu_RenderPolygon(PosColorUVVertex *vData, uint32_t nv) {
   gRenderer->setTextureEnabled(1, false);
 
   // draw the data in the arrays
+  FlushPendingDepthClear();
   dglDrawArrays(GL_TRIANGLE_FAN, gRenderer->addVertexData(vData, vData + nv), nv);
 
   if (gpu_state.cur_texture_quality == 0) {
@@ -1366,6 +1404,7 @@ void gpu_RenderPolygon(PosColorUVVertex *vData, uint32_t nv) {
 void gpu_RenderPolygonUV2(PosColorUV2Vertex *vData, uint32_t nv) {
   gRenderer->setTextureEnabled(1, true);
 
+  FlushPendingDepthClear();
   dglDrawArrays(GL_TRIANGLE_FAN, gRenderer->addVertexData(vData, vData + nv), nv);
   OpenGL_polys_drawn++;
   OpenGL_verts_processed += nv;
@@ -1455,11 +1494,6 @@ void rend_SetTextureType(texture_type state) {
   gpu_state.cur_texture_type = state;
 }
 
-static bool GDepthClearedThisFrame = false;
-
-// Not any real state value, so setting a cache to it forces the next set through.
-static constexpr int8_t kStateCacheInvalid = 0x7F;
-
 
 void rend_StartFrame(int x1, int y1, int x2, int y2, int clear_flags) {
 #ifdef __ANDROID__
@@ -1469,9 +1503,8 @@ void rend_StartFrame(int x1, int y1, int x2, int y2, int clear_flags) {
   // GPU resolve the whole tile buffer to memory and read it back: cheap on a
   // desktop or an immediate-mode mobile GPU, ruinous on a tiler. One clear per
   // frame is what the render actually needs.
-  if ((clear_flags & RF_CLEAR_ZBUFFER) && !GDepthClearedThisFrame) {
-    GDepthClearedThisFrame = true;
-    dglClear(GL_DEPTH_BUFFER_BIT);
+  if (clear_flags & RF_CLEAR_ZBUFFER) {
+    GDepthClearPending = true;
   }
   gpu_state.clip_x1 = x1;
   gpu_state.clip_y1 = y1;
@@ -1505,7 +1538,6 @@ void rend_Flip() {
   }
 #endif
 
-  GDepthClearedThisFrame = false;
 
   gpu_last_frame_polys_drawn = OpenGL_polys_drawn;
   gpu_last_frame_verts_processed = OpenGL_verts_processed;
@@ -1569,6 +1601,10 @@ void rend_Flip() {
   gpu_state.cur_alpha_type = kStateCacheInvalid;
   opengl_Blending_on = true; // the overlay left GL_BLEND enabled
   rend_SetAlphaType(atype);
+
+  // The overlay binds its own textures too, so what is bound now is not what the
+  // cache remembers. Forget it rather than guess; one bind a frame is nothing.
+  OpenGL_last_bound[0] = OpenGL_last_bound[1] = 9999999;
 #endif
 }
 
@@ -1647,6 +1683,7 @@ void rend_SetPixel(ddgr_color color, int x, int y) {
       {GR_COLOR_RED(color) / 255.0f, GR_COLOR_GREEN(color) / 255.0f, GR_COLOR_BLUE(color) / 255.0f, 1},
       {},
       {}};
+  FlushPendingDepthClear();
   dglDrawArrays(GL_POINTS, gRenderer->addVertexData(&vtx, &vtx + 1), 1);
 }
 
@@ -1684,6 +1721,7 @@ void rend_DrawLine(int x1, int y1, int x2, int y2) {
       PosColorUV2Vertex{
           {static_cast<float>(x2 + gpu_state.clip_x1), static_cast<float>(y2 + gpu_state.clip_y1), 0}, color, {}, {}}};
 
+  FlushPendingDepthClear();
   dglDrawArrays(GL_LINES, gRenderer->addVertexData(vertices.begin(), vertices.end()), vertices.size());
 
   rend_SetAlphaType(atype);
@@ -1762,6 +1800,7 @@ void rend_DrawSpecialLine(g3Point *p0, g3Point *p1) {
                              {}};
   });
 
+  FlushPendingDepthClear();
   dglDrawArrays(GL_LINES, gRenderer->addVertexData(vertices.begin(), vertices.end()), vertices.size());
 }
 
