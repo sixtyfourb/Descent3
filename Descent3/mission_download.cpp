@@ -619,9 +619,9 @@ int msn_CheckGetMission(network_address *net_addr, char *filename) {
     return 1;
   }
 
-  LOG_WARNING.printf("msn_CheckGetMission: no %s (tried bare, \"%s\", \"%s\", \"%s\")", filename,
-                     pathname.u8string().c_str(), from_base.u8string().c_str(),
-                     relative.u8string().c_str());
+  LOG_DEBUG.printf("msn_CheckGetMission: no %s (tried bare, \"%s\", \"%s\", \"%s\")", filename,
+                   pathname.u8string().c_str(), from_base.u8string().c_str(),
+                   relative.u8string().c_str());
 
   msn_urls *murls;
 
