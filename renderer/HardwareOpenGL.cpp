@@ -242,12 +242,27 @@ static constexpr int8_t kStateCacheInvalid = 0x7F;
 // GL only updates the depth buffer when the test is enabled - so a pending clear
 // can wait behind any number of them, which is exactly what the 2D elements are.
 // Every clear the render depends on still happens, in the right place.
+//
+// One more thing the deferral has to answer for that an immediate clear did not:
+// glClear(GL_DEPTH_BUFFER_BIT) is gated by the depth write mask, and the game
+// spends much of a frame with that mask off. DrawSky turns off the depth test
+// and the write mask together, so the pending clear waits behind the sky (right)
+// and is then paid at the first terrain draw, which turns the test back on but
+// leaves the mask off (wrong): the clear did nothing and the frame rendered
+// against the previous frame's depth buffer, so walls were rejected while the
+// sky and terrain behind them - drawn with the depth test off, so unconditional -
+// kept the pixels. Force the mask on for the clear itself and put it back.
 static bool GDepthClearPending = false;
+static bool GDepthWriteMask = true; // GL's own initial value
 
 static void FlushPendingDepthClear() {
   if (GDepthClearPending && gpu_state.cur_zbuffer_state) {
     GDepthClearPending = false;
+    if (!GDepthWriteMask)
+      dglDepthMask(GL_TRUE);
     dglClear(GL_DEPTH_BUFFER_BIT);
+    if (!GDepthWriteMask)
+      dglDepthMask(GL_FALSE);
   }
 }
 #else
@@ -1605,6 +1620,9 @@ void rend_Flip() {
   // The overlay binds its own textures too, so what is bound now is not what the
   // cache remembers. Forget it rather than guess; one bind a frame is nothing.
   OpenGL_last_bound[0] = OpenGL_last_bound[1] = 9999999;
+
+  // Same reasoning for the depth write mask: cheaper to reassert than to trust.
+  dglDepthMask(GDepthWriteMask ? GL_TRUE : GL_FALSE);
 #endif
 }
 
@@ -1848,6 +1866,9 @@ void rend_Screenshot(int bm_handle) {
 // Enables/disables writes the depth buffer
 void rend_SetZBufferWriteMask(int state) {
   OpenGL_sets_this_frame[5]++;
+#ifdef __ANDROID__
+  GDepthWriteMask = (state != 0); // FlushPendingDepthClear has to work around it
+#endif
   if (state) {
     dglDepthMask(GL_TRUE);
   } else {
