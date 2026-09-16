@@ -66,6 +66,7 @@
  * $NoKeywords: $
  */
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <SDL3/SDL.h>
@@ -376,6 +377,7 @@ void ddio_InternalJoyFrame(void) {
 //	Numbered for an XInput-shaped pad, which is what these handhelds present.
 #define JOY_MENU_BTN_A 0
 #define JOY_MENU_BTN_B 1
+#define JOY_MENU_BTN_RB 5
 #define JOY_MENU_BTN_BACK 6
 #define JOY_MENU_BTN_START 7
 
@@ -399,6 +401,48 @@ static bool joy_MenuRepeat(int dir, bool down, uint64_t now) {
     return false;
   next[dir] = now + JOY_MENU_REPEAT_RATE;
   return true;
+}
+
+//	How far the left stick is pushed, as a fraction of full deflection, for
+//	moving the cursor. Descent 3's interface is a point-and-click one underneath
+//	- the Android port drove its menus with a finger rather than with keys - and
+//	some screens have no keyboard traversal at all. Returns false when the stick
+//	is centred, so a caller can leave the cursor alone.
+//	Whether the pad's click button is held. RB, leaving A as the key that works
+//	whatever gadget has the focus - two ways in that never fight each other.
+bool joy_MenuClick(void) {
+  for (int j = 0; j < MAX_JOYSTICKS; j++) {
+    tJoyPos pos;
+
+    if (!joy_IsValid((tJoystick)j))
+      continue;
+    joy_GetPos((tJoystick)j, &pos);
+    if (pos.buttons & (1 << JOY_MENU_BTN_RB))
+      return true;
+  }
+  return false;
+}
+
+bool joy_MenuStick(float *x, float *y) {
+  *x = *y = 0.0f;
+
+  for (int j = 0; j < MAX_JOYSTICKS; j++) {
+    tJoyPos pos;
+
+    if (!joy_IsValid((tJoystick)j))
+      continue;
+    joy_GetPos((tJoystick)j, &pos);
+
+    //	A wide deadzone: this is a cursor, and a stick that rests a little off
+    //	centre should not send it wandering across the screen on its own.
+    float fx = (float)pos.x / 32768.0f;
+    float fy = (float)pos.y / 32768.0f;
+    if (fabsf(fx) > 0.25f)
+      *x = fx;
+    if (fabsf(fy) > 0.25f)
+      *y = fy;
+  }
+  return (*x != 0.0f) || (*y != 0.0f);
 }
 
 //	What the pad means while flying: one thing only.
@@ -433,7 +477,14 @@ int joy_GameKey(void) {
 //	layers on top.
 int joy_MenuKey(void) {
   static uint32_t last_buttons[MAX_JOYSTICKS] = {0};
-  static const int dir_keys[JOY_MENU_DIRS] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
+  //	Up and down traverse gadgets, left and right move within one.
+  //
+  //	UIWindow only acts on the arrow keys when the focused gadget belongs to a
+  //	group - "handle direction keys only in a group" - which an ordinary menu's
+  //	buttons do not, so arrows alone moved nothing on most screens. Tab is the
+  //	general traversal and works everywhere; the arrows still go out sideways,
+  //	where a group or a slider wants them.
+  static const int dir_keys[JOY_MENU_DIRS] = {KEY_SHIFTED + KEY_TAB, KEY_TAB, KEY_LEFT, KEY_RIGHT};
   static const struct {
     int button;
     int key;

@@ -269,6 +269,31 @@ bool ui_MousePoll(bool buttons) {
   int msebtn;
   bool state;
   if (!buttons) {
+    //	Let the pad's left stick push the cursor first.
+    //
+    //	This interface is a point-and-click one underneath. UIWindow acts on the
+    //	arrow keys only for a gadget inside a group, so Tab is the only traversal
+    //	that works generally - and some screens, the pilot pictures among them,
+    //	have no keyboard path to what they hold at all. A cursor reaches
+    //	everything, which is how the Android port drove these menus.
+    float sx, sy;
+    if (joy_MenuStick(&sx, &sy)) {
+      //	Speed is in the engine's mouse coordinates, which are the interface
+      //	size scaled up, so this is a fraction of the screen per frame rather
+      //	than a pixel count.
+      static constexpr float kCursorSpeed = 320.0f;
+      ddio_MouseNudge(sx * kCursorSpeed, sy * kCursorSpeed);
+    }
+
+    //	And a click where it ends up, on the edges of the button so the press
+    //	and the release each arrive once, as they would from a real mouse.
+    static bool was_clicking = false;
+    bool clicking = joy_MenuClick();
+    if (clicking != was_clicking) {
+      ddio_MouseSyntheticLeftButton(clicking);
+      was_clicking = clicking;
+    }
+
     //	get all input, mouse maintains persistent button info. key doesn't.
     btn_mask = ddio_MouseGetState(&mx, &my, NULL, NULL);
     UI_input.last_mx = UI_input.mx;

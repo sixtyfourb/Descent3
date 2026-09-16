@@ -314,6 +314,14 @@ void ddio_MouseGetLimits(int *left, int *top, int *right, int *bottom, int *zmin
 // virtual coordinate system for mouse (match to video resolution set for optimal mouse usage.
 void ddio_MouseSetVCoords(int width, int height);
 
+//	Move the cursor by a step in the engine's mouse coordinates, leaving the
+//	deltas the flight controls read alone. Used to push it with a gamepad stick.
+void ddio_MouseNudge(float dx, float dy);
+
+//	A left click from a gamepad button rather than a mouse, at wherever the
+//	cursor currently is.
+void ddio_MouseSyntheticLeftButton(bool down);
+
 //	---------------------------------------------------------------------------
 //	File Operations
 //	---------------------------------------------------------------------------

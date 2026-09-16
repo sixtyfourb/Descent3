@@ -160,6 +160,13 @@ int joy_MenuKey(void);
 //	key and a handheld has none. Offered by the game loop's key handling.
 int joy_GameKey(void);
 
+//	Left stick deflection as a fraction of full, for pushing the cursor around
+//	screens that have no keyboard traversal. False when it is centred.
+bool joy_MenuStick(float *x, float *y);
+
+//	Whether the pad's click button is held, for clicking where the cursor is.
+bool joy_MenuClick(void);
+
 //	returns true if joystick valid
 bool joy_IsValid(tJoystick joy);
 

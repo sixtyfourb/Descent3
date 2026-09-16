@@ -387,12 +387,73 @@ bool sdlMouseWheelFilter(SDL_Event const *event) {
   return false;
 }
 
+//	A left click from something that is not a mouse - a gamepad button, with the
+//	cursor pushed around by its stick. Records exactly what a real button event
+//	records, so nothing downstream can tell the difference: the mask the
+//	interface polls, the counters and timings, and the event queue.
+void ddio_MouseSyntheticLeftButton(bool down) {
+  t_mse_event mevt;
+
+  if (down) {
+    DDIO_mouse_state.btn_mask |= MOUSE_LB;
+    DIM_buttons.down_count[0]++;
+    DIM_buttons.time_down[0] = timer_GetTime();
+    DIM_buttons.is_down[0] = true;
+  } else {
+    DDIO_mouse_state.btn_mask &= (~MOUSE_LB);
+    DIM_buttons.up_count[0]++;
+    DIM_buttons.is_down[0] = false;
+    DIM_buttons.time_up[0] = timer_GetTime();
+  }
+  mevt.btn = 0;
+  mevt.state = down;
+  MB_queue.send(mevt);
+}
+
+//	Move the cursor by a step, in the engine's own mouse coordinates, without
+//	disturbing the deltas the flight controls read. For pushing it with a
+//	gamepad stick on screens the keyboard cannot traverse.
+void ddio_MouseNudge(float dx, float dy) {
+  DDIO_mouse_state.x += dx;
+  DDIO_mouse_state.y += dy;
+
+  if (DDIO_mouse_state.x < DDIO_mouse_state.l)
+    DDIO_mouse_state.x = DDIO_mouse_state.l;
+  if (DDIO_mouse_state.x >= DDIO_mouse_state.r)
+    DDIO_mouse_state.x = DDIO_mouse_state.r - 1;
+  if (DDIO_mouse_state.y < DDIO_mouse_state.t)
+    DDIO_mouse_state.y = DDIO_mouse_state.t;
+  if (DDIO_mouse_state.y >= DDIO_mouse_state.b)
+    DDIO_mouse_state.y = DDIO_mouse_state.b - 1;
+}
+
 bool sdlMouseMotionFilter(SDL_Event const *event) {
   if (event->type == SDL_EVENT_JOYSTICK_BALL_MOTION) {
     DDIO_mouse_state.dx = event->jball.xrel / 100.0f;
     DDIO_mouse_state.dy = event->jball.yrel / 100.0f;
     DDIO_mouse_state.x += DDIO_mouse_state.dx;
     DDIO_mouse_state.y += DDIO_mouse_state.dy;
+  } else if (event->motion.which == SDL_TOUCH_MOUSEID) {
+    //	A finger, not a mouse. This engine only ever accumulates relative motion
+    //	into a position, which is right for a mouse and hopeless for a
+    //	touchscreen: the screen knows where the finger is, so put the cursor
+    //	there rather than dragging it that way a few pixels at a time. The
+    //	engine's mouse box is the interface size scaled up, not the window size,
+    //	so go through the window as a fraction.
+    int ww = 0, wh = 0;
+    SDL_Window *window = SDL_GetMouseFocus();
+    if (window)
+      SDL_GetWindowSize(window, &ww, &wh);
+    if ((ww > 0) && (wh > 0)) {
+      DDIO_mouse_state.x =
+          DDIO_mouse_state.l + (event->motion.x / (float)ww) * (DDIO_mouse_state.r - DDIO_mouse_state.l);
+      DDIO_mouse_state.y =
+          DDIO_mouse_state.t + (event->motion.y / (float)wh) * (DDIO_mouse_state.b - DDIO_mouse_state.t);
+      //	The flight controls read these; a jump to an absolute point is not
+      //	motion and must not arrive as a shove on the stick.
+      DDIO_mouse_state.dx = 0;
+      DDIO_mouse_state.dy = 0;
+    }
   } else {
     DDIO_mouse_state.dx += event->motion.xrel;
     DDIO_mouse_state.dy += event->motion.yrel;
