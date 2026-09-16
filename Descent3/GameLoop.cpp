@@ -802,6 +802,7 @@
 #include <cstring>
 
 #include "chrono_timer.h"
+#include "joystick.h"
 #include "gameloop.h"
 #include "game.h"
 #include "render.h"
@@ -2389,8 +2390,13 @@ void ProcessKeys() {
   if (Game_interface_mode != GAME_INTERFACE || Menu_interface_mode)
     return;
 
-  // Process all pending keys
-  while ((key = ddio_KeyInKey()) != 0) {
+  // Process all pending keys, and then whatever the pad stands for.
+  //
+  //	joy_GameKey offers Start as Escape, which opens the in-game menu. Only
+  //	Start: the player's own bindings do the flying, and translating anything
+  //	else here would make an unbound button drop them out of the level. It is
+  //	edge triggered and consumes the press, so it cannot spin this loop.
+  while (((key = ddio_KeyInKey()) != 0) || ((key = joy_GameKey()) != 0)) {
 
     // Where does this belong?
     //	do d3x debugging console

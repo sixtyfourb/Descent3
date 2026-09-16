@@ -156,6 +156,10 @@ void joy_GetRawPos(tJoystick joy, tJoyPos *pos);
 //	machine with no keyboard can still get past the pilot screen.
 int joy_MenuKey(void);
 
+//	Start, and only Start, as Escape - the in-game menu is reached by no other
+//	key and a handheld has none. Offered by the game loop's key handling.
+int joy_GameKey(void);
+
 //	returns true if joystick valid
 bool joy_IsValid(tJoystick joy);
 

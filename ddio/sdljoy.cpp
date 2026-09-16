@@ -401,6 +401,30 @@ static bool joy_MenuRepeat(int dir, bool down, uint64_t now) {
   return true;
 }
 
+//	What the pad means while flying: one thing only.
+//
+//	The player's own bindings do the flying, and a general translation here would
+//	make every unbound button do something surprising. Start is offered because
+//	the in-game menu is reached by Escape and nothing else, and a handheld has no
+//	Escape key - so without this there is no way out of a level at all.
+int joy_GameKey(void) {
+  static uint32_t last_buttons[MAX_JOYSTICKS] = {0};
+
+  for (int j = 0; j < MAX_JOYSTICKS; j++) {
+    tJoyPos pos;
+    uint32_t pressed;
+
+    if (!joy_IsValid((tJoystick)j))
+      continue;
+    joy_GetPos((tJoystick)j, &pos);
+    pressed = pos.buttons & ~last_buttons[j];
+    last_buttons[j] = pos.buttons;
+    if (pressed & (1 << JOY_MENU_BTN_START))
+      return KEY_ESC;
+  }
+  return 0;
+}
+
 //	What the pad has to say, as a key code, or 0 for nothing.
 //
 //	Every pad that is open, not just the first: which slot the one in the
