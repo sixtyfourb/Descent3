@@ -173,6 +173,7 @@
 #include "pserror.h"
 #include "renderer.h"
 #include "Macros.h"
+#include "joystick.h"
 
 constexpr float kDefaultMouseScale = 20;
 
@@ -308,6 +309,11 @@ bool ui_MousePoll(bool buttons) {
 bool ui_KeyPoll() {
   int key;
   key = ddio_KeyInKey();
+  //	...and the gamepad, which is what the "possibly joystick?" above wanted.
+  //	Nothing below needs to know: the pad arrives as the arrow keys, Enter and
+  //	Esc, which every gadget here already handles.
+  if (!key)
+    key = joy_MenuKey();
   if (key == KEY_PRINT_SCREEN)
     UI_input.printscreen = true;
   UI_input.last_key = UI_input.key;

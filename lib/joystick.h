@@ -150,6 +150,12 @@ void joy_GetPos(tJoystick joy, tJoyPos *pos);
 //	retreive uncalibrated position of joystick
 void joy_GetRawPos(tJoystick joy, tJoyPos *pos);
 
+//	Translates a gamepad into the keys the interface already navigates with -
+//	the arrows, Enter and Esc - or 0 when the pad has nothing to say. See
+//	sdljoy.cpp. Offered by ui_KeyPoll whenever the keyboard is idle, so that a
+//	machine with no keyboard can still get past the pilot screen.
+int joy_MenuKey(void);
+
 //	returns true if joystick valid
 bool joy_IsValid(tJoystick joy);
 

@@ -74,6 +74,7 @@
 #include "args.h"
 #include "joystick.h"
 #include "log.h"
+#include "ddio_common.h" // for the KEY_* codes joy_MenuKey returns
 
 //	---------------------------------------------------------------------------
 //	globals
@@ -98,6 +99,15 @@ static bool joy_InitStick(tJoystick joy, char *server_adr);
 
 //	joystick system initialization
 bool joy_Init() {
+  // Keep reading the pad even when the window does not hold input focus.
+  //
+  // SDL discards joystick input while the window is unfocused. Under a
+  // compositor that manages focus itself - gamescope, which is how these
+  // handhelds run games - the window can be the only thing on screen and still
+  // not be what SDL considers focused, and then the pad is dead with no
+  // diagnostic: the sticks open, and every axis reads zero forever.
+  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+
   //	reinitialize joystick if already initialized.
   joy_Close();
   if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK)) {
@@ -343,4 +353,124 @@ static int joyGetNumDevs(void) {
 
 void ddio_InternalJoyFrame(void) {
   // All the work is done already in SDL_PumpEvents()
+}
+
+//	---------------------------------------------------------------------------
+//	Driving the menus from a gamepad.
+//
+//	The interface reads the mouse and the keyboard, and ui_KeyPoll has carried a
+//	comment asking "possibly joystick?" since 1999. On a handheld with neither a
+//	mouse nor a keyboard that leaves the pilot screen unreachable, and with it
+//	the whole game.
+//
+//	Nothing in the interface needs to change: UIWindow already moves the focus on
+//	the arrow keys and on Tab, UIButton takes Enter and Space, Esc works the
+//	cancel gadget, and the list boxes take up and down. It simply never sees a
+//	pad. So translate the pad into those keys, here where the button numbering is
+//	known, and let ui_KeyPoll offer it whenever the keyboard has nothing.
+
+#define JOY_MENU_REPEAT_DELAY 350 // ms held before a direction repeats
+#define JOY_MENU_REPEAT_RATE 100  // ms between repeats after that
+#define JOY_MENU_AXIS_THRESHOLD (32767 / 2)
+
+//	Numbered for an XInput-shaped pad, which is what these handhelds present.
+#define JOY_MENU_BTN_A 0
+#define JOY_MENU_BTN_B 1
+#define JOY_MENU_BTN_BACK 6
+#define JOY_MENU_BTN_START 7
+
+enum { JOY_MENU_UP, JOY_MENU_DOWN, JOY_MENU_LEFT, JOY_MENU_RIGHT, JOY_MENU_DIRS };
+
+//	Arrow keys repeat when held, and a pilot list is unusable without it. The
+//	directions are read as levels rather than as events - a stick has no key-up -
+//	so the repeat has to be timed here.
+static bool joy_MenuRepeat(int dir, bool down, uint64_t now) {
+  static uint64_t next[JOY_MENU_DIRS] = {0, 0, 0, 0};
+
+  if (!down) {
+    next[dir] = 0;
+    return false;
+  }
+  if (!next[dir]) { // went down this frame: act at once, then wait
+    next[dir] = now + JOY_MENU_REPEAT_DELAY;
+    return true;
+  }
+  if (now < next[dir])
+    return false;
+  next[dir] = now + JOY_MENU_REPEAT_RATE;
+  return true;
+}
+
+//	What the pad has to say, as a key code, or 0 for nothing.
+//
+//	Every pad that is open, not just the first: which slot the one in the
+//	player's hands lands in is not up to us, since the physical controls are
+//	often hidden behind a virtual pad the compositor makes and another that Steam
+//	layers on top.
+int joy_MenuKey(void) {
+  static uint32_t last_buttons[MAX_JOYSTICKS] = {0};
+  static const int dir_keys[JOY_MENU_DIRS] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
+  static const struct {
+    int button;
+    int key;
+  } button_keys[] = {
+      {JOY_MENU_BTN_A, KEY_ENTER},    // accept, and work a button
+      {JOY_MENU_BTN_START, KEY_ENTER},
+      {JOY_MENU_BTN_B, KEY_ESC},      // back out
+      {JOY_MENU_BTN_BACK, KEY_ESC},
+  };
+
+  bool down[JOY_MENU_DIRS] = {false, false, false, false};
+  uint64_t now = SDL_GetTicks();
+  int key = 0;
+
+  for (int j = 0; j < MAX_JOYSTICKS; j++) {
+    tJoyPos pos;
+    uint32_t pressed;
+
+    if (!joy_IsValid((tJoystick)j))
+      continue;
+    joy_GetPos((tJoystick)j, &pos);
+
+    //	The hat, as a compass: 0 is up and it runs clockwise, with 0xff for
+    //	centred. Each direction claims the two diagonals beside it.
+    if (pos.pov[0] != JOYPOV_CENTER) {
+      uint32_t pov = pos.pov[0];
+      if (pov >= 0xE0 || pov <= 0x20)
+        down[JOY_MENU_UP] = true;
+      if (pov >= 0x20 && pov <= 0x60)
+        down[JOY_MENU_RIGHT] = true;
+      if (pov >= 0x60 && pov <= 0xA0)
+        down[JOY_MENU_DOWN] = true;
+      if (pov >= 0xA0 && pov <= 0xE0)
+        down[JOY_MENU_LEFT] = true;
+    }
+
+    //	The first stick, which means the same as the hat once it is far enough
+    //	over. Half deflection is the smallest threshold worth trusting: a
+    //	handheld's stick rests off centre often enough.
+    if (pos.y < -JOY_MENU_AXIS_THRESHOLD)
+      down[JOY_MENU_UP] = true;
+    else if (pos.y > JOY_MENU_AXIS_THRESHOLD)
+      down[JOY_MENU_DOWN] = true;
+    if (pos.x < -JOY_MENU_AXIS_THRESHOLD)
+      down[JOY_MENU_LEFT] = true;
+    else if (pos.x > JOY_MENU_AXIS_THRESHOLD)
+      down[JOY_MENU_RIGHT] = true;
+
+    //	Buttons need no repeat, so take the edge: pressed since last time.
+    pressed = pos.buttons & ~last_buttons[j];
+    last_buttons[j] = pos.buttons;
+    for (size_t i = 0; i < std::size(button_keys); i++)
+      if ((pressed & (1 << button_keys[i].button)) && !key)
+        key = button_keys[i].key;
+  }
+
+  //	Every direction every time, even once one has fired: the ones that were let
+  //	go have to be seen to be let go, or they will not repeat properly next time.
+  for (int i = 0; i < JOY_MENU_DIRS; i++)
+    if (joy_MenuRepeat(i, down[i], now) && !key)
+      key = dir_keys[i];
+
+  return key;
 }
