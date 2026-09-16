@@ -66,6 +66,7 @@
  * $NoKeywords: $
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -81,10 +82,30 @@
 //	globals
 
 static int specificJoy = -1;
+//	The six axes tJoyPos carries - x, y, z, r, u and v - and the width of the
+//	button mask it carries them beside. Named here rather than taken from the
+//	controller headers, which this file does not otherwise depend on.
+#define JOY_NUM_AXES 6
+#define JOY_BUTTON_BITS 32
+
 static struct {
   SDL_Joystick *handle;
   tJoyInfo caps;
+  //	Each axis also appears as a pair of buttons, so that a shoulder trigger -
+  //	which XInput reports as an axis rather than as a button - can be bound to
+  //	fire something. real_btns is how many buttons the pad actually has, before
+  //	those; axis_rest is where each axis sits untouched, which is what the pair
+  //	is measured from; axis_btn_state carries the hysteresis between polls.
+  int real_btns;
+  int axis_rest[JOY_NUM_AXES];
+  uint32_t axis_btn_state;
 } Joysticks[MAX_JOYSTICKS];
+
+//	Deflection from rest at which an axis counts as a button press, and the lower
+//	figure at which it stops counting. The gap keeps an axis resting near the
+//	threshold from chattering.
+#define JOY_AXIS_BUTTON_ON 16384
+#define JOY_AXIS_BUTTON_OFF 11000
 
 static int joyGetNumDevs(void);
 
@@ -206,10 +227,29 @@ static bool joy_InitStick(tJoystick joy, char *server_adr) {
     case 0:
       break;
     }
+    //	Ask SDL where each axis is sitting before anyone has touched it. This is
+    //	the whole difficulty with triggers: one rests at the far end of its
+    //	travel, so measured from zero it reads as fully deflected all the time
+    //	and its button would be permanently held.
+    SDL_UpdateJoysticks();
+    Joysticks[joy].real_btns = caps.num_btns;
+    Joysticks[joy].axis_btn_state = 0;
+    for (int i = 0; i < JOY_NUM_AXES; i++)
+      Joysticks[joy].axis_rest[i] = (i < axes) ? SDL_GetJoystickAxis(stick, i) : 0;
+
+    //	Two more buttons per axis, after the real ones. The mask is 32 bits wide
+    //	and CT_MAX_BUTTONS is 32, so stop there rather than run off either.
+    unsigned synthetic = caps.num_btns + 2 * std::min(axes, JOY_NUM_AXES);
+    caps.num_btns = (synthetic > JOY_BUTTON_BITS) ? JOY_BUTTON_BITS : synthetic;
+
     Joysticks[joy].caps = caps;
 
     LOG_DEBUG.printf("JOYSTICK: Initialized stick named [%s].", caps.name);
-    LOG_DEBUG.printf("JOYSTICK: (%d) axes, (%d) hats, and (%d) buttons.", axes, hats, caps.num_btns);
+    LOG_DEBUG.printf("JOYSTICK: (%d) axes, (%d) hats, and (%d) buttons (%d real).", axes, hats, caps.num_btns,
+                     Joysticks[joy].real_btns);
+    LOG_DEBUG.printf("JOYSTICK: axes rest at %d %d %d %d %d %d.", Joysticks[joy].axis_rest[0],
+                     Joysticks[joy].axis_rest[1], Joysticks[joy].axis_rest[2], Joysticks[joy].axis_rest[3],
+                     Joysticks[joy].axis_rest[4], Joysticks[joy].axis_rest[5]);
   }
 
   return (Joysticks[joy].handle != NULL);
@@ -318,9 +358,38 @@ void joy_GetPos(tJoystick joy, tJoyPos *pos) {
         pos->pov[i] = map_hat(SDL_GetJoystickHat(stick, i));
       }
     }
-    for (i = Joysticks[joy].caps.num_btns; i >= 0; --i) {
+    for (i = Joysticks[joy].real_btns; i >= 0; --i) {
       if (SDL_GetJoystickButton(stick, i)) {
         pos->buttons |= (1 << i);
+      }
+    }
+
+    //	And the pair each axis makes, negative deflection then positive, measured
+    //	from where the axis rests rather than from zero. Hysteresis: one that is
+    //	already down has to come back further than it took to press it.
+    for (i = 0; i < JOY_NUM_AXES; i++) {
+      int bit = Joysticks[joy].real_btns + 2 * i;
+
+      if (bit + 1 >= JOY_BUTTON_BITS)
+        break;
+
+      int d = SDL_GetJoystickAxis(stick, i) - Joysticks[joy].axis_rest[i];
+      bool was_minus = (Joysticks[joy].axis_btn_state & (1 << bit)) != 0;
+      bool was_plus = (Joysticks[joy].axis_btn_state & (1 << (bit + 1))) != 0;
+      bool minus = d < -(was_minus ? JOY_AXIS_BUTTON_OFF : JOY_AXIS_BUTTON_ON);
+      bool plus = d > (was_plus ? JOY_AXIS_BUTTON_OFF : JOY_AXIS_BUTTON_ON);
+
+      if (minus) {
+        pos->buttons |= (1 << bit);
+        Joysticks[joy].axis_btn_state |= (1 << bit);
+      } else {
+        Joysticks[joy].axis_btn_state &= ~(1 << bit);
+      }
+      if (plus) {
+        pos->buttons |= (1 << (bit + 1));
+        Joysticks[joy].axis_btn_state |= (1 << (bit + 1));
+      } else {
+        Joysticks[joy].axis_btn_state &= ~(1 << (bit + 1));
       }
     }
   }
