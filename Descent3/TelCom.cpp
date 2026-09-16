@@ -496,6 +496,7 @@
 #include <cstring>
 
 #include "chrono_timer.h"
+#include "joystick.h"
 #include "log.h"
 #include "renderer.h"
 #include "render.h"
@@ -1341,7 +1342,12 @@ bool TelComMainMenu(tTelComInfo *tcs) {
 
     TelcomRenderScreen();
     Descent->defer();
-    if (KEY_STATE(KEY_ESC))
+    //	The pad leaves too. This tests the raw key state rather than reading the
+    //	key buffer, so a translated key code cannot satisfy it - ask the pad
+    //	directly. Escape or Enter: whatever a player presses to get out of a
+    //	briefing should get them out of it.
+    int joykey = joy_MenuKey();
+    if (KEY_STATE(KEY_ESC) || (joykey == KEY_ESC) || (joykey == KEY_ENTER))
       Telcom_system.state = TCS_POWEROFF;
 
     Sound_system.EndSoundFrame();
