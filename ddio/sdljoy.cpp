@@ -323,6 +323,27 @@ static inline uint32_t map_hat(Uint8 value) {
 }
 
 //	returns the state of a stick, remote or otherwise
+//	An axis read from where it actually rests, spread back over the full range.
+//
+//	A stick rests in the middle and this changes nothing for it. A shoulder
+//	trigger rests at one end of its travel, and read raw it is therefore fully
+//	deflected the whole time it is not being touched - which is why binding any
+//	axis on the controls screen captured Z-axis on its own, that being the first
+//	axis found past the threshold. Untouched now reads zero, whoever is asking:
+//	the config screen, the bindings, and the pair of buttons below.
+static int joy_AxisFromRest(tJoystick joy, int axis) {
+  int raw = SDL_GetJoystickAxis(Joysticks[joy].handle, axis);
+  int rest = Joysticks[joy].axis_rest[axis];
+  int d = raw - rest;
+
+  if (d >= 0) {
+    int range = 32767 - rest;
+    return (range > 0) ? (int)((int64_t)d * 32767 / range) : 0;
+  }
+  int range = rest + 32768;
+  return (range > 0) ? (int)((int64_t)d * 32768 / range) : 0;
+}
+
 void joy_GetPos(tJoystick joy, tJoyPos *pos) {
   SDL_Joystick *stick;
   int i;
@@ -336,22 +357,22 @@ void joy_GetPos(tJoystick joy, tJoyPos *pos) {
 
     mask = Joysticks[joy].caps.axes_mask;
     if (mask & JOYFLAG_XVALID) {
-      pos->x = SDL_GetJoystickAxis(stick, 0);
+      pos->x = joy_AxisFromRest(joy, 0);
     }
     if (mask & JOYFLAG_YVALID) {
-      pos->y = SDL_GetJoystickAxis(stick, 1);
+      pos->y = joy_AxisFromRest(joy, 1);
     }
     if (mask & JOYFLAG_ZVALID) {
-      pos->z = SDL_GetJoystickAxis(stick, 2);
+      pos->z = joy_AxisFromRest(joy, 2);
     }
     if (mask & JOYFLAG_RVALID) {
-      pos->r = SDL_GetJoystickAxis(stick, 3);
+      pos->r = joy_AxisFromRest(joy, 3);
     }
     if (mask & JOYFLAG_UVALID) {
-      pos->u = SDL_GetJoystickAxis(stick, 4);
+      pos->u = joy_AxisFromRest(joy, 4);
     }
     if (mask & JOYFLAG_VVALID) {
-      pos->v = SDL_GetJoystickAxis(stick, 5);
+      pos->v = joy_AxisFromRest(joy, 5);
     }
     for (i = 0; i < JOYPOV_NUM; ++i) {
       if (mask & (JOYFLAG_POVVALID << i)) {
@@ -373,7 +394,7 @@ void joy_GetPos(tJoystick joy, tJoyPos *pos) {
       if (bit + 1 >= JOY_BUTTON_BITS)
         break;
 
-      int d = SDL_GetJoystickAxis(stick, i) - Joysticks[joy].axis_rest[i];
+      int d = joy_AxisFromRest(joy, i);
       bool was_minus = (Joysticks[joy].axis_btn_state & (1 << bit)) != 0;
       bool was_plus = (Joysticks[joy].axis_btn_state & (1 << (bit + 1))) != 0;
       bool minus = d < -(was_minus ? JOY_AXIS_BUTTON_OFF : JOY_AXIS_BUTTON_ON);
@@ -559,8 +580,12 @@ int joy_MenuKey(void) {
     int button;
     int key;
   } button_keys[] = {
-      {JOY_MENU_BTN_A, KEY_ENTER},    // accept, and work a button
-      {JOY_MENU_BTN_START, KEY_ENTER},
+      {JOY_MENU_BTN_A, KEY_ENTER}, // accept, and work a button
+      //	Start is deliberately absent. It is what opens the in-game menu, and a
+      //	button that opened a confirmation and answered it in the same press
+      //	walked straight out of the game: joy_GameKey turned it into Escape for
+      //	the game loop, and this turned the same press into Enter for the dialog
+      //	that came up. Start means "menu", and nothing else.
       {JOY_MENU_BTN_B, KEY_ESC},      // back out
       {JOY_MENU_BTN_BACK, KEY_ESC},
       {JOY_MENU_BTN_LB, KEY_SHIFTED + KEY_TAB}, // and the shoulders move
