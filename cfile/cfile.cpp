@@ -93,6 +93,27 @@ void cf_AddDefaultBaseDirectories() {
  */
 void cf_AddBaseDirectory(const std::filesystem::path &base_directory) {
   if (std::filesystem::exists(base_directory) && std::filesystem::is_directory(base_directory)) {
+    // Only once. A directory listed twice is found twice by everything that
+    // walks these paths, so the mission list shows two of every mission and the
+    // level list two of every level. It is easy to arrive at by accident: a
+    // portable build resolves its own data directory to the current one, so
+    // launching from the data directory and also naming it with -additionaldir
+    // is enough. Compare canonically, since the same directory reached two ways
+    // is still the same directory.
+    std::error_code ec;
+    std::filesystem::path incoming = std::filesystem::canonical(base_directory, ec);
+    if (ec)
+      incoming = base_directory;
+    for (const auto &existing : Base_directories) {
+      std::error_code ec2;
+      std::filesystem::path known = std::filesystem::canonical(existing, ec2);
+      if (ec2)
+        known = existing;
+      if (known == incoming) {
+        LOG_DEBUG << "Skipping duplicate base directory: " << base_directory;
+        return;
+      }
+    }
     Base_directories.push_back(base_directory);
   } else {
     LOG_WARNING << "Ignoring nonexistent base directory: " << base_directory;
