@@ -206,6 +206,7 @@
 #include <cstring>
 
 #include "Briefing.h"
+#include "joystick.h"
 #include "BriefingParse.h"
 #include "log.h"
 #include "mem.h"
@@ -445,7 +446,10 @@ bool PlayBriefing(tTelComInfo *tcs) {
 
     TelcomRenderScreen();
     Descent->defer();
-    if (KEY_STATE(KEY_ESC))
+    //	Start on the pad counts as Escape here. Each of these screens runs its own
+    //	loop and tests the raw key state to decide when to leave, which no
+    //	translated key code can satisfy, so each has to ask the pad directly.
+    if (KEY_STATE(KEY_ESC) || (joy_GameKey() == KEY_ESC))
       tcs->state = TCS_POWEROFF;
 
     Sound_system.EndSoundFrame();
@@ -568,7 +572,10 @@ bool PBLoopCallback() {
   TelcomRenderScreen();
 
   Descent->defer();
-  if (KEY_STATE(KEY_ESC)) {
+  //	Start on the pad counts as Escape here. Each of these screens runs its own
+  //	loop and tests the raw key state to decide when to leave, which no
+  //	translated key code can satisfy, so each has to ask the pad directly.
+  if (KEY_STATE(KEY_ESC) || (joy_GameKey() == KEY_ESC)) {
     pb_tcs->state = TCS_POWEROFF;
     ret = true;
   }

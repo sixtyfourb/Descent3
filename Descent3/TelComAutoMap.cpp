@@ -147,6 +147,7 @@
  */
 
 #include "TelComAutoMap.h"
+#include "joystick.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -356,7 +357,10 @@ bool TelComAutoMap(tTelComInfo *tcs) {
 
     TelcomRenderScreen();
     Descent->defer();
-    if (KEY_STATE(KEY_ESC)) {
+    //	Start on the pad counts as Escape here. Each of these screens runs its own
+    //	loop and tests the raw key state to decide when to leave, which no
+    //	translated key code can satisfy, so each has to ask the pad directly.
+    if (KEY_STATE(KEY_ESC) || (joy_GameKey() == KEY_ESC)) {
       AM_tcs->state = TCS_POWEROFF;
     }
     //		if(KEY_STATE(KEY_TAB)){

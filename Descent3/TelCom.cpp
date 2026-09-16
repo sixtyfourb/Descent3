@@ -637,6 +637,15 @@ void TelComMain(bool ingame, bool SelectShip) {
 
   while (Telcom_system.state != TCS_POWEROFF) {
 
+    //	Start always leaves, whatever has the focus. A briefing is left by
+    //	finding its own quit button, which is fine with a mouse and a poor deal
+    //	on a pad if the focus is somewhere unhelpful - and a player who wants out
+    //	of a briefing should not have to hunt for the way.
+    if (joy_GameKey() == KEY_ESC) {
+      Telcom_system.state = TCS_POWEROFF;
+      break;
+    }
+
     TelComEnableSystemKey(TCSYS_MAXKEYS, true);
 
     switch (Telcom_system.current_status) {
@@ -1346,8 +1355,7 @@ bool TelComMainMenu(tTelComInfo *tcs) {
     //	key buffer, so a translated key code cannot satisfy it - ask the pad
     //	directly. Escape or Enter: whatever a player presses to get out of a
     //	briefing should get them out of it.
-    int joykey = joy_MenuKey();
-    if (KEY_STATE(KEY_ESC) || (joykey == KEY_ESC) || (joykey == KEY_ENTER))
+    if (KEY_STATE(KEY_ESC) || (joy_GameKey() == KEY_ESC))
       Telcom_system.state = TCS_POWEROFF;
 
     Sound_system.EndSoundFrame();
@@ -2635,7 +2643,11 @@ void TelComHandleAllEvents(tTelComInfo *tcs) {
 
   TelCom_PrepareCustomKeyEvents();
 
-  while ((key = ddio_KeyInKey()) != 0) {
+  //	The pad drives this too. Everything the TelCom screens navigate with -
+  //	Tab, the arrows, Enter, Space - is translated through TranslateSysKey
+  //	below, so a pad arriving as those keys moves between the buttons on a
+  //	briefing screen and presses them, with nothing else needing to know.
+  while (((key = ddio_KeyInKey()) != 0) || ((key = joy_MenuKey()) != 0)) {
     for (i = 0; i < TCSYS_MAXKEYS; i++) {
       TelCom_ProcessCustomKeyEvent(key);
 
@@ -3569,7 +3581,10 @@ void TelComSingleShipSelect(tTelComInfo *tcs) {
 
     TelcomRenderScreen();
     Descent->defer();
-    if (KEY_STATE(KEY_ESC))
+    //	Start on the pad counts as Escape here. Each of these screens runs its own
+    //	loop and tests the raw key state to decide when to leave, which no
+    //	translated key code can satisfy, so each has to ask the pad directly.
+    if (KEY_STATE(KEY_ESC) || (joy_GameKey() == KEY_ESC))
       tcs->state = TCS_POWEROFF;
 
     Sound_system.EndSoundFrame();
