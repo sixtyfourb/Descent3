@@ -19,6 +19,7 @@
 #include <cstring>
 
 #include "application.h"
+#include "joystick.h"
 #include "args.h"
 #include "bitmap.h"
 #include "d3movie.h"
@@ -117,8 +118,15 @@ int mve_PlayMovie(const std::filesystem::path &pMovieName, oeApplication *pApp) 
     pApp->defer();
 
     // check for bail
+    //
+    //	The pad counts too. A handheld has no Escape key, so the opening movie
+    //	was unskippable and there was no way to reach the menu behind it at all.
+    //	joy_MenuKey offers Escape on B and Back, and Enter on A and Start -
+    //	anything the player presses to get out of a movie should get them out.
     int key = ddio_KeyInKey();
-    if (key == KEY_ESC) {
+    if (!key)
+      key = joy_MenuKey();
+    if ((key == KEY_ESC) || (key == KEY_ENTER)) {
       aborted = true;
       break;
     }
