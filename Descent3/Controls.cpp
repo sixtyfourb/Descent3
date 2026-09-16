@@ -472,8 +472,18 @@ void DoCommands();
 static void ToggleHeadlightControlState();
 
 //	LIST OF NEEDS
-//	The joystick half of these defaults is laid out for a gamepad rather than for
-//	a flight stick. The stock layout put heading and pitch on one stick, bank on
+//	The joystick half of these defaults is a working gamepad layout, taken from a
+//	pilot configured by hand on a Retroid Pocket Flip 2 and transcribed here, so
+//	that a pad is playable out of the box rather than after a session on the
+//	controls screen.
+//
+//	Button numbers are SDL's index plus one, so A is 1 and Start is 8. Two of
+//	them are past the real buttons: 17 and 23 are the pairs the shoulder
+//	triggers contribute, which sit after the eleven an XInput pad has - right for
+//	any Xbox-shaped controller, and the first thing to look at on a pad built
+//	differently.
+//
+//	The layout it replaces was a flight stick's. The stock layout put heading and pitch on one stick, bank on
 //	the second stick's X and sideways thrust on its Y, and slide up/down on an
 //	axis that an XInput pad uses for a shoulder trigger - which on a handheld
 //	gives a ship that banks when you try to turn and slides when you try to look.
@@ -490,14 +500,14 @@ ct_function Controller_needs[NUM_CONTROLLER_FUNCTIONS] = {
     {ctfFORWARD_BUTTON, ctTime, ctButton, ctButton, 0, 0, 0, 0},
     {ctfREVERSE_BUTTON, ctTime, ctButton, ctButton, 0, 0, 0, 0},
     {ctfUP_THRUSTAXIS, ctAnalog, ctAxis, ctAxis, 0, 0, 0, 0},
-    {ctfUP_BUTTON, ctDigital, ctPOV, ctButton, JOYPOV_UP, 0, 0, 0},
+    {ctfUP_BUTTON, ctDigital, ctButton, ctButton, 5, 0, 0, 0},
     {ctfUP_THRUSTKEY, ctTime, ctKey, ctKey, KEY_PADMINUS, 0, 0, 0},
-    {ctfDOWN_BUTTON, ctDigital, ctPOV, ctButton, JOYPOV_DOWN, 0, 0, 0},
+    {ctfDOWN_BUTTON, ctDigital, ctButton, ctButton, 17, 0, 0, 0},
     {ctfDOWN_THRUSTKEY, ctTime, ctKey, ctKey, KEY_PADPLUS, 0, 0, 0},
     {ctfRIGHT_THRUSTAXIS, ctAnalog, ctAxis, ctAxis, CT_X_AXIS, 0, 0, 0},
-    {ctfRIGHT_BUTTON, ctDigital, ctPOV, ctButton, JOYPOV_RIGHT, 0, 0, 0},
+    {ctfRIGHT_BUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
     {ctfRIGHT_THRUSTKEY, ctTime, ctKey, ctKey, KEY_PAD3, 0, 0, 0},
-    {ctfLEFT_BUTTON, ctDigital, ctPOV, ctButton, JOYPOV_LEFT, 0, 0, 0},
+    {ctfLEFT_BUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
     {ctfLEFT_THRUSTKEY, ctTime, ctKey, ctKey, KEY_PAD1, 0, 0, 0},
     {ctfPITCH_DOWNAXIS, ctAnalog, ctAxis, ctMouseAxis, CT_U_AXIS, CT_Y_AXIS, 0, 0},
     {ctfPITCH_DOWNKEY, ctTime, ctKey, ctKey, KEY_UP, KEY_PAD8, 0, 0},
@@ -506,26 +516,26 @@ ct_function Controller_needs[NUM_CONTROLLER_FUNCTIONS] = {
     {ctfPITCH_UPBUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
     {ctfBANK_RIGHTAXIS, ctAnalog, ctAxis, ctAxis, 0, 0, 0, 0},
     {ctfBANK_RIGHTKEY, ctTime, ctKey, ctKey, KEY_E, KEY_PAD9, 0, 0},
-    {ctfBANK_RIGHTBUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
+    {ctfBANK_RIGHTBUTTON, ctDigital, ctButton, ctButton, 1, 0, 0, 0},
     {ctfBANK_LEFTKEY, ctTime, ctKey, ctKey, KEY_Q, KEY_PAD7, 0, 0},
-    {ctfBANK_LEFTBUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
+    {ctfBANK_LEFTBUTTON, ctDigital, ctButton, ctButton, 3, 0, 0, 0},
     {ctfHEADING_RIGHTAXIS, ctAnalog, ctAxis, ctMouseAxis, CT_R_AXIS, CT_X_AXIS, 0, 0},
     {ctfHEADING_RIGHTKEY, ctTime, ctKey, ctKey, KEY_RIGHT, KEY_PAD6, 0, 0},
     {ctfHEADING_RIGHTBUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
     {ctfHEADING_LEFTKEY, ctTime, ctKey, ctKey, KEY_LEFT, KEY_PAD4, 0, 0},
     {ctfHEADING_LEFTBUTTON, ctDigital, ctButton, ctButton, 0, 0, 0, 0},
-    {ctfFIREPRIMARY_BUTTON, ctTime, ctButton, ctMouseButton, 6, 1, 0, 0},
+    {ctfFIREPRIMARY_BUTTON, ctTime, ctButton, ctMouseButton, 23, 1, 0, 0},
     {ctfFIREPRIMARY_KEY, ctTime, ctKey, ctKey, KEY_LCTRL, KEY_RCTRL, 0, 0},
     {ctfFIREPRIMARY_KEY2, ctTime, ctKey, ctKey, 0, 0, 0, 0},
-    {ctfFIRESECONDARY_BUTTON, ctTime, ctButton, ctMouseButton, 5, 2, 0, 0},
+    {ctfFIRESECONDARY_BUTTON, ctTime, ctButton, ctMouseButton, 6, 2, 0, 0},
     {ctfFIRESECONDARY_KEY, ctTime, ctKey, ctKey, KEY_SPACEBAR, 0, 0, 0},
     {ctfTOGGLE_SLIDEBUTTON, ctTime, ctButton, ctButton, 0, 0, 0, 0},
     {ctfTOGGLE_SLIDEKEY, ctTime, ctKey, ctKey, KEY_LALT, 0, 0, 0},
     {ctfTOGGLE_BANKBUTTON, ctTime, ctButton, ctButton, 0, 0, 0, 0},
     {ctfTOGGLE_BANKKEY, ctTime, ctKey, ctKey, 0, 0, 0, 0},
-    {ctfFIREFLARE_BUTTON, ctTime, ctButton, ctMouseButton, 2, 3, 0, 0},
+    {ctfFIREFLARE_BUTTON, ctTime, ctButton, ctMouseButton, 0, 3, 0, 0},
     {ctfFIREFLARE_KEY, ctDownCount, ctKey, ctKey, KEY_F, 0, 0, 0},
-    {ctfAFTERBURN_BUTTON, ctTime, ctButton, ctButton, 1, 0, 0, 0},
+    {ctfAFTERBURN_BUTTON, ctTime, ctButton, ctButton, 10, 0, 0, 0},
     {ctfAFTERBURN_KEY, ctTime, ctKey, ctKey, KEY_S, 0, 0, 0},
     {ctfAUTOMAP_KEY, ctDownCount, ctKey, ctKey, KEY_TAB, 0, 0, 0},
     {ctfPREV_INVKEY, ctDownCount, ctKey, ctKey, KEY_LBRACKET, 0, 0, 0},
@@ -535,20 +545,20 @@ ct_function Controller_needs[NUM_CONTROLLER_FUNCTIONS] = {
     {ctfNEXT_CNTMSKEY, ctDownCount, ctKey, ctKey, KEY_RAPOSTRO, 0, 0, 0},
     {ctfCNTMS_USEKEY, ctDownCount, ctKey, ctKey, KEY_ENTER, 0, 0, 0},
     {ctfHEADLIGHT_KEY, ctDownCount, ctKey, ctKey, KEY_H, 0, 0, 0},
-    {ctfHEADLIGHT_BUTTON, ctDownCount, ctButton, ctButton, 10, 0, 0, 0},
+    {ctfHEADLIGHT_BUTTON, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
     {ctfAUTOMAP_BUTTON, ctDownCount, ctButton, ctButton, 7, 0, 0, 0},
-    {ctfPREV_INVBTN, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
-    {ctfNEXT_INVBTN, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
-    {ctfINV_USEBTN, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
+    {ctfPREV_INVBTN, ctDownCount, ctPOV, ctButton, JOYPOV_LEFT, 0, 0, 0},
+    {ctfNEXT_INVBTN, ctDownCount, ctPOV, ctButton, JOYPOV_RIGHT, 0, 0, 0},
+    {ctfINV_USEBTN, ctDownCount, ctPOV, ctButton, JOYPOV_UP, 0, 0, 0},
     {ctfPREV_CNTMSBTN, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
     {ctfNEXT_CNTMSBTN, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
     {ctfCNTMS_USEBTN, ctDownCount, ctButton, ctMouseButton, 4, 4, 0, 0},
     {ctfWPNSEL_PCYCLEKEY, ctDownCount, ctKey, ctKey, KEY_COMMA, 0, 0, 0},
-    {ctfWPNSEL_PCYCLEBTN, ctDownCount, ctButton, ctMouseButton, 3, 5, 0, 0},
+    {ctfWPNSEL_PCYCLEBTN, ctDownCount, ctButton, ctMouseButton, 4, 5, 0, 0},
     {ctfWPNSEL_SCYCLEKEY, ctDownCount, ctKey, ctKey, KEY_PERIOD, 0, 0, 0},
-    {ctfWPNSEL_SCYCLEBTN, ctDownCount, ctButton, ctMouseButton, 4, 6, 0, 0},
+    {ctfWPNSEL_SCYCLEBTN, ctDownCount, ctButton, ctMouseButton, 2, 6, 0, 0},
     {ctfREARVIEW_KEY, ctDownCount, ctKey, ctKey, KEY_R, 0, 0, 0},
-    {ctfREARVIEW_BTN, ctDownCount, ctButton, ctButton, 11, 0, 0, 0},
+    {ctfREARVIEW_BTN, ctDownCount, ctPOV, ctButton, JOYPOV_DOWN, 0, 0, 0},
     {ctfAUDIOTAUNT1_KEY, ctDownCount, ctKey, ctKey, 0, 0, 0, 0},
     {ctfAUDIOTAUNT1_BTN, ctDownCount, ctButton, ctButton, 0, 0, 0, 0},
     {ctfAUDIOTAUNT2_KEY, ctDownCount, ctKey, ctKey, 0, 0, 0, 0},
