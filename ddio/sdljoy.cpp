@@ -377,6 +377,8 @@ void ddio_InternalJoyFrame(void) {
 //	Numbered for an XInput-shaped pad, which is what these handhelds present.
 #define JOY_MENU_BTN_A 0
 #define JOY_MENU_BTN_B 1
+#define JOY_MENU_BTN_X 2
+#define JOY_MENU_BTN_LB 4
 #define JOY_MENU_BTN_RB 5
 #define JOY_MENU_BTN_BACK 6
 #define JOY_MENU_BTN_START 7
@@ -408,8 +410,9 @@ static bool joy_MenuRepeat(int dir, bool down, uint64_t now) {
 //	- the Android port drove its menus with a finger rather than with keys - and
 //	some screens have no keyboard traversal at all. Returns false when the stick
 //	is centred, so a caller can leave the cursor alone.
-//	Whether the pad's click button is held. RB, leaving A as the key that works
-//	whatever gadget has the focus - two ways in that never fight each other.
+//	Whether the pad's click button is held. X, which nothing else uses: A sends
+//	Enter for whatever has the focus and the shoulders send Tab to move it, so
+//	the pointer and the keyboard routes never fight over a button.
 bool joy_MenuClick(void) {
   for (int j = 0; j < MAX_JOYSTICKS; j++) {
     tJoyPos pos;
@@ -417,7 +420,7 @@ bool joy_MenuClick(void) {
     if (!joy_IsValid((tJoystick)j))
       continue;
     joy_GetPos((tJoystick)j, &pos);
-    if (pos.buttons & (1 << JOY_MENU_BTN_RB))
+    if (pos.buttons & (1 << JOY_MENU_BTN_X))
       return true;
   }
   return false;
@@ -477,14 +480,12 @@ int joy_GameKey(void) {
 //	layers on top.
 int joy_MenuKey(void) {
   static uint32_t last_buttons[MAX_JOYSTICKS] = {0};
-  //	Up and down traverse gadgets, left and right move within one.
-  //
-  //	UIWindow only acts on the arrow keys when the focused gadget belongs to a
-  //	group - "handle direction keys only in a group" - which an ordinary menu's
-  //	buttons do not, so arrows alone moved nothing on most screens. Tab is the
-  //	general traversal and works everywhere; the arrows still go out sideways,
-  //	where a group or a slider wants them.
-  static const int dir_keys[JOY_MENU_DIRS] = {KEY_SHIFTED + KEY_TAB, KEY_TAB, KEY_LEFT, KEY_RIGHT};
+  //	The d-pad sends the arrows, which is what the contents of a screen want:
+  //	a list box scrolls its items on up and down, and a group of gadgets moves
+  //	between them. Moving between the gadgets themselves is Tab, and that is on
+  //	the shoulders below - UIWindow acts on the arrows only inside a group, so
+  //	neither one alone can reach everything.
+  static const int dir_keys[JOY_MENU_DIRS] = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
   static const struct {
     int button;
     int key;
@@ -493,6 +494,8 @@ int joy_MenuKey(void) {
       {JOY_MENU_BTN_START, KEY_ENTER},
       {JOY_MENU_BTN_B, KEY_ESC},      // back out
       {JOY_MENU_BTN_BACK, KEY_ESC},
+      {JOY_MENU_BTN_LB, KEY_SHIFTED + KEY_TAB}, // and the shoulders move
+      {JOY_MENU_BTN_RB, KEY_TAB},               // between the gadgets
   };
 
   bool down[JOY_MENU_DIRS] = {false, false, false, false};
@@ -521,17 +524,9 @@ int joy_MenuKey(void) {
         down[JOY_MENU_LEFT] = true;
     }
 
-    //	The first stick, which means the same as the hat once it is far enough
-    //	over. Half deflection is the smallest threshold worth trusting: a
-    //	handheld's stick rests off centre often enough.
-    if (pos.y < -JOY_MENU_AXIS_THRESHOLD)
-      down[JOY_MENU_UP] = true;
-    else if (pos.y > JOY_MENU_AXIS_THRESHOLD)
-      down[JOY_MENU_DOWN] = true;
-    if (pos.x < -JOY_MENU_AXIS_THRESHOLD)
-      down[JOY_MENU_LEFT] = true;
-    else if (pos.x > JOY_MENU_AXIS_THRESHOLD)
-      down[JOY_MENU_RIGHT] = true;
+    //	The stick is deliberately not read here. It pushes the cursor instead,
+    //	through joy_MenuStick, and a control doing two jobs at once - scrolling a
+    //	list and moving a pointer on the same push - is worse than either.
 
     //	Buttons need no repeat, so take the edge: pressed since last time.
     pressed = pos.buttons & ~last_buttons[j];

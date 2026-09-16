@@ -433,32 +433,40 @@ bool sdlMouseMotionFilter(SDL_Event const *event) {
     DDIO_mouse_state.dy = event->jball.yrel / 100.0f;
     DDIO_mouse_state.x += DDIO_mouse_state.dx;
     DDIO_mouse_state.y += DDIO_mouse_state.dy;
-  } else if (event->motion.which == SDL_TOUCH_MOUSEID) {
-    //	A finger, not a mouse. This engine only ever accumulates relative motion
-    //	into a position, which is right for a mouse and hopeless for a
-    //	touchscreen: the screen knows where the finger is, so put the cursor
-    //	there rather than dragging it that way a few pixels at a time. The
-    //	engine's mouse box is the interface size scaled up, not the window size,
-    //	so go through the window as a fraction.
-    int ww = 0, wh = 0;
-    SDL_Window *window = SDL_GetMouseFocus();
-    if (window)
-      SDL_GetWindowSize(window, &ww, &wh);
-    if ((ww > 0) && (wh > 0)) {
-      DDIO_mouse_state.x =
-          DDIO_mouse_state.l + (event->motion.x / (float)ww) * (DDIO_mouse_state.r - DDIO_mouse_state.l);
-      DDIO_mouse_state.y =
-          DDIO_mouse_state.t + (event->motion.y / (float)wh) * (DDIO_mouse_state.b - DDIO_mouse_state.t);
-      //	The flight controls read these; a jump to an absolute point is not
-      //	motion and must not arrive as a shove on the stick.
-      DDIO_mouse_state.dx = 0;
-      DDIO_mouse_state.dy = 0;
-    }
   } else {
     DDIO_mouse_state.dx += event->motion.xrel;
     DDIO_mouse_state.dy += event->motion.yrel;
-    DDIO_mouse_state.x += DDIO_mouse_state.dx;
-    DDIO_mouse_state.y += DDIO_mouse_state.dy;
+
+    //	In standard mode the position is absolute - "uses absolute coordinates",
+    //	as ddio.h puts it - so take where the pointer is rather than accumulating
+    //	how far it moved. Accumulating drifts, and the interface then highlights
+    //	whatever lies under its own stale idea of the cursor rather than under
+    //	the one you can see. A finger is worse again: a touchscreen reports where
+    //	you are, not how far you travelled, so dragging a cursor towards it can
+    //	never catch up.
+    //
+    //	The mouse box is the interface size scaled up rather than the window
+    //	size, so come through the window as a fraction.
+    if (Mouse_mode == MOUSE_STANDARD_MODE) {
+      int ww = 0, wh = 0;
+      SDL_Window *window = SDL_GetMouseFocus();
+
+      if (window)
+        SDL_GetWindowSize(window, &ww, &wh);
+      if ((ww > 0) && (wh > 0)) {
+        DDIO_mouse_state.x =
+            DDIO_mouse_state.l + (event->motion.x / (float)ww) * (DDIO_mouse_state.r - DDIO_mouse_state.l);
+        DDIO_mouse_state.y =
+            DDIO_mouse_state.t + (event->motion.y / (float)wh) * (DDIO_mouse_state.b - DDIO_mouse_state.t);
+      } else {
+        DDIO_mouse_state.x += DDIO_mouse_state.dx;
+        DDIO_mouse_state.y += DDIO_mouse_state.dy;
+      }
+    } else {
+      //	Flying: the pointer is captured, and only the motion means anything.
+      DDIO_mouse_state.x += DDIO_mouse_state.dx;
+      DDIO_mouse_state.y += DDIO_mouse_state.dy;
+    }
   }
 
   if (DDIO_mouse_state.x < DDIO_mouse_state.l)
